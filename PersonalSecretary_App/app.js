@@ -416,7 +416,15 @@ function switchTab(tabId) {
 function loadData() {
   const storedTx = localStorage.getItem('secretary_transactions');
   if (storedTx) {
-    transactions = JSON.parse(storedTx);
+    const loaded = JSON.parse(storedTx);
+    // Auto-wipe old mock transactions if they exist in localStorage
+    const hasMocks = loaded.some(t => t.id && String(t.id).startsWith('tx_mock'));
+    if (hasMocks) {
+      transactions = [];
+      saveTransactions();
+    } else {
+      transactions = loaded;
+    }
   } else {
     transactions = [];
     saveTransactions();
