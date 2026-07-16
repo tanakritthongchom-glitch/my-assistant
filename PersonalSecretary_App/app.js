@@ -141,6 +141,15 @@ const slipDetailCategorySelect = document.getElementById('slip-detail-category-s
 const slipDetailImg = document.getElementById('slip-detail-img');
 const slipDetailImgPlaceholder = document.getElementById('slip-detail-img-placeholder');
 
+// Cycle Closing Elements
+const btnCloseCycle = document.getElementById('btn-close-cycle');
+const modalCloseCycle = document.getElementById('modal-close-cycle');
+const btnCloseCycleModal = document.getElementById('btn-close-cycle-modal');
+const btnCancelCycleModal = document.getElementById('btn-cancel-cycle-modal');
+const btnConfirmCloseCycle = document.getElementById('btn-confirm-close-cycle');
+const cycleSummaryReport = document.getElementById('cycle-summary-report');
+const chkCurrentCycleOnly = document.getElementById('chk-current-cycle-only');
+
 // Category list
 const categories = [
   "🍔 ของกิน",
@@ -248,7 +257,8 @@ function setupEventListeners() {
       amount,
       title,
       category,
-      date
+      date,
+      cycleStatus: 'active'
     };
 
     addTransaction(newTx);
@@ -303,21 +313,7 @@ function setupEventListeners() {
     });
   }
 
-  // Reset database button
-  const btnResetDb = document.getElementById('btn-reset-db');
-  if (btnResetDb) {
-    btnResetDb.addEventListener('click', () => {
-      if (confirm('⚠️ คุณต้องการล้างข้อมูลจำลองทั้งหมดเพื่อเริ่มบันทึกใช้งานจริงใช่หรือไม่? (ข้อมูลจำลองทั้งหมดจะถูกลบออก)')) {
-        transactions = [];
-        saveTransactions();
-        populateMonthFilter();
-        updateDashboard();
-        renderHistory();
-        updateAdvisor();
-        alert('ล้างข้อมูลสำเร็จแล้ว! คุณสามารถเริ่มต้นบันทึกข้อมูลการเงินจริงของคุณได้ทันที');
-      }
-    });
-  }
+
 
   // Backup & Restore listeners
   const btnExport = document.getElementById('btn-export-data');
@@ -352,6 +348,32 @@ function setupEventListeners() {
     modalViewSlip.addEventListener('click', (e) => {
       if (e.target === modalViewSlip) {
         closeSlipModal();
+      }
+    });
+  }
+
+  // Cycle Closing Event Listeners
+  if (chkCurrentCycleOnly) {
+    chkCurrentCycleOnly.addEventListener('change', () => {
+      updateDashboard();
+    });
+  }
+  if (btnCloseCycle) {
+    btnCloseCycle.addEventListener('click', openCycleModal);
+  }
+  if (btnCloseCycleModal) {
+    btnCloseCycleModal.addEventListener('click', closeCycleModal);
+  }
+  if (btnCancelCycleModal) {
+    btnCancelCycleModal.addEventListener('click', closeCycleModal);
+  }
+  if (btnConfirmCloseCycle) {
+    btnConfirmCloseCycle.addEventListener('click', confirmCloseCycle);
+  }
+  if (modalCloseCycle) {
+    modalCloseCycle.addEventListener('click', (e) => {
+      if (e.target === modalCloseCycle) {
+        closeCycleModal();
       }
     });
   }
@@ -396,17 +418,9 @@ function loadData() {
   if (storedTx) {
     transactions = JSON.parse(storedTx);
   } else {
-    // Put some premium mockup transactions if empty, so it doesn't look boring initially
-    transactions = [
-      { id: 'tx_mock_1', type: 'income', amount: 45000, title: 'เงินเดือนสะสม', category: '💰 รายรับ', date: getRecentDateString(5) },
-      { id: 'tx_mock_2', type: 'expense', amount: 350, title: 'โอนชำระ ชาบูบุฟเฟต์', category: '🍔 ของกิน', date: getRecentDateString(4) },
-      { id: 'tx_mock_3', type: 'expense', amount: 4500, title: 'โอนชำระ คอนโดประจำเดือน', category: '🏠 รายจ่ายประจำเดือน', date: getRecentDateString(3) },
-      { id: 'tx_mock_4', type: 'expense', amount: 1500, title: 'อู่ช่างชาติ ซ่อมยางรถ', category: '⚠️ รายจ่ายไม่คาดคิด', date: getRecentDateString(2) },
-      { id: 'tx_mock_5', type: 'expense', amount: 890, title: 'โอนจ่าย ค่าของใช้โลตัส', category: '🛒 รายจ่ายทั่วไป/อื่นๆ', date: getRecentDateString(1) }
-    ];
+    transactions = [];
     saveTransactions();
   }
-
 }
 
 // Get standard date relative to today for mockups
@@ -435,6 +449,10 @@ function deleteTransaction(id) {
   if (confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
     transactions = transactions.filter(t => t.id !== id);
     saveTransactions();
+    // Also delete slip image from IndexedDB if stored
+    deleteSlipImage(id)
+      .then(() => console.log('Deleted slip associated with:', id))
+      .catch(err => console.error('Error deleting slip:', err));
     populateMonthFilter();
     updateDashboard();
     renderHistory();
@@ -461,10 +479,17 @@ function updateDashboard() {
   const monthFilter = document.getElementById('db-month-filter');
   const selectedMonth = monthFilter ? monthFilter.value : 'all';
 
-  // Filter transactions based on selected month
+  const showCurrentCycleOnly = chkCurrentCycleOnly ? chkCurrentCycleOnly.checked : true;
+
+  // Filter transactions based on selected month and cycleStatus
   const filteredTxs = transactions.filter(tx => {
-    if (selectedMonth === 'all') return true;
-    return tx.date.startsWith(selectedMonth);
+    const matchMonth = (selectedMonth === 'all') || tx.date.startsWith(selectedMonth);
+    if (!matchMonth) return false;
+
+    if (showCurrentCycleOnly && tx.cycleStatus === 'archived') {
+      return false;
+    }
+    return true;
   });
 
   filteredTxs.forEach(tx => {
@@ -1108,7 +1133,8 @@ function saveAllScannedResults() {
         title: titleVal,
         category: categoryVal,
         date: dateVal,
-        hasSlip: hasSlip
+        hasSlip: hasSlip,
+        cycleStatus: 'active'
       };
 
       // Save slip image to IndexedDB
@@ -1794,4 +1820,154 @@ function saveSlipCategory() {
   }
 
   closeSlipModal();
+}
+
+// Open Cycle Closing Modal & Calculate Summary Report
+function openCycleModal() {
+  const monthFilter = document.getElementById('db-month-filter');
+  const selectedMonth = monthFilter ? monthFilter.value : 'all';
+
+  // 1. Calculate active statistics for the current active cycle
+  let activeIncome = 0;
+  let activeExpense = 0;
+  
+  const categorySums = {
+    "🍔 ของกิน": 0,
+    "💸 โอนให้คนอื่น": 0,
+    "🏠 รายจ่ายประจำเดือน": 0,
+    "⚠️ รายจ่ายไม่คาดคิด": 0,
+    "🛒 รายจ่ายทั่วไป/อื่นๆ": 0
+  };
+
+  const activeTxs = transactions.filter(tx => {
+    const matchMonth = (selectedMonth === 'all') || tx.date.startsWith(selectedMonth);
+    return matchMonth && (tx.cycleStatus !== 'archived');
+  });
+
+  activeTxs.forEach(tx => {
+    if (tx.type === 'income') {
+      activeIncome += tx.amount;
+    } else if (tx.type === 'expense') {
+      activeExpense += tx.amount;
+      if (categorySums[tx.category] !== undefined) {
+        categorySums[tx.category] += tx.amount;
+      } else {
+        categorySums["🛒 รายจ่ายทั่วไป/อื่นๆ"] += tx.amount;
+      }
+    }
+  });
+
+  const netSavings = activeIncome - activeExpense;
+  const savingsRate = activeIncome > 0 ? (netSavings / activeIncome) * 100 : 0;
+
+  // Grade badge determination
+  let grade = 'C';
+  let gradeColor = '#f59e0b';
+  let gradeName = 'พอใช้';
+
+  if (savingsRate >= 30) {
+    grade = 'A';
+    gradeColor = '#10b981';
+    gradeName = 'วินัยระดับมหาเศรษฐี';
+  } else if (savingsRate >= 15) {
+    grade = 'B';
+    gradeColor = '#3b82f6';
+    gradeName = 'วินัยการเงินดี';
+  } else if (savingsRate < 0) {
+    grade = 'D';
+    gradeColor = '#ef4444';
+    gradeName = 'เงินติดลบ/หนี้สินสะสม';
+  }
+
+  // Leak Analysis
+  let leakHTML = '';
+  const foodPct = activeIncome > 0 ? (categorySums["🍔 ของกิน"] / activeIncome) * 100 : 0;
+  const transferPct = activeIncome > 0 ? (categorySums["💸 โอนให้คนอื่น"] / activeIncome) * 100 : 0;
+  const fixedPct = activeIncome > 0 ? (categorySums["🏠 รายจ่ายประจำเดือน"] / activeIncome) * 100 : 0;
+
+  if (foodPct > 35) {
+    leakHTML += `<li>🍔 <b>ค่าอาหารค่อนข้างสูง:</b> สัดส่วน ${foodPct.toFixed(0)}% ของรายรับ</li>`;
+  }
+  if (transferPct > 20) {
+    leakHTML += `<li>💸 <b>โอนเงินเยอะ:</b> สัดส่วน ${transferPct.toFixed(0)}% ของรายรับ</li>`;
+  }
+  if (fixedPct > 45) {
+    leakHTML += `<li>🏠 <b>รายจ่ายประจำรั้งตัวเลข:</b> สัดส่วน ${fixedPct.toFixed(0)}% ของรายรับ</li>`;
+  }
+  if (leakHTML === '') {
+    leakHTML = '<li style="color: var(--income);">✨ <b>ยินดีด้วย!</b> ไม่พบจุดรั่วไหลเด่นชัดในรอบการออมนี้</li>';
+  }
+
+  // Set modal summary content
+  cycleSummaryReport.innerHTML = `
+    <!-- Grade and Title Card -->
+    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+      <div>
+        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">เกรดสุขภาพเงินรอบนี้</div>
+        <div style="font-size: 16px; font-weight: 800; color: ${gradeColor}; margin-top: 2px;">เกรด ${grade}</div>
+        <div style="font-size: 10px; color: var(--text-secondary); margin-top: 1px;">${gradeName} (${savingsRate.toFixed(1)}%)</div>
+      </div>
+      <div style="font-size: 24px;">${grade === 'A' ? '🏆' : (grade === 'B' ? '🌟' : (grade === 'C' ? '😐' : '🚨'))}</div>
+    </div>
+
+    <!-- Active Statistics Table -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+      <div style="background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.1); padding: 8px 10px; border-radius: 6px;">
+        <span style="font-size: 9px; color: var(--income);">รายรับรวมรอบนี้</span>
+        <div style="font-size: 14px; font-weight: 700; color: var(--income); margin-top: 2px;">฿${activeIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+      </div>
+      <div style="background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.1); padding: 8px 10px; border-radius: 6px;">
+        <span style="font-size: 9px; color: var(--expense);">รายจ่ายรวมรอบนี้</span>
+        <div style="font-size: 14px; font-weight: 700; color: var(--expense); margin-top: 2px;">฿${activeExpense.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+      </div>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; margin-bottom: 12px;">
+      <span style="font-size: 9px; color: var(--text-muted);">ยอดเงินคงเหลือเก็บออม</span>
+      <div style="font-size: 15px; font-weight: 800; color: ${netSavings >= 0 ? 'var(--income)' : 'var(--expense)'}; margin-top: 2px;">฿${netSavings.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+    </div>
+
+    <!-- Leak List -->
+    <div style="font-size: 11px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">🎯 สรุปการตรวจสอบรูรั่ว:</div>
+    <ul style="margin: 0; padding-left: 18px; font-size: 10.5px; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 4px;">
+      ${leakHTML}
+    </ul>
+  `;
+
+  modalCloseCycle.classList.add('active');
+  lucide.createIcons();
+}
+
+// Close Cycle Modal
+function closeCycleModal() {
+  modalCloseCycle.classList.remove('active');
+}
+
+// Confirm Close & Archive Active Transactions
+function confirmCloseCycle() {
+  const monthFilter = document.getElementById('db-month-filter');
+  const selectedMonth = monthFilter ? monthFilter.value : 'all';
+
+  let count = 0;
+
+  // Mark transactions in the current active view as archived
+  transactions.forEach(tx => {
+    const matchMonth = (selectedMonth === 'all') || tx.date.startsWith(selectedMonth);
+    if (matchMonth && tx.cycleStatus !== 'archived') {
+      tx.cycleStatus = 'archived';
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    saveTransactions();
+    closeCycleModal();
+    updateDashboard();
+    renderHistory();
+    updateAdvisor();
+    alert(`ปิดรอบการเงินและเคลียร์หน้าจอสำเร็จทั้งหมด ${count} รายการ! ข้อมูลเดิมยังถูกจัดเก็บอยู่ครบถ้วนในแถบประวัติเพื่อรวบรวมคำนวณเกรดปลายเดือนครับ`);
+  } else {
+    alert('ไม่พบรายการที่ยังไม่ได้ปิดรอบในรอบบัญชีปัจจุบันนี้ครับ');
+    closeCycleModal();
+  }
 }
