@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <!-- Optimized for Mobile Notch and Full-Screen PWA -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>เลขาส่วนตัวทางการเงิน</title>
+  
+  <!-- PWA Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="shortcut icon" href="icon.jpg" type="image/jpeg">
+
+  <!-- Google Fonts & Lucide Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Status Bar Spacer (for iOS notch) -->
+  <div class="status-bar-spacer"></div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo-area">
+        <div class="logo-icon">💰</div>
+        <div>
+          <h1>เลขาส่วนตัว</h1>
+          <p class="subtitle">ระบบการเงินอัจฉริยะของคุณ</p>
+        </div>
+      </div>
+      <button id="btn-add-manual" class="btn-icon-add" title="บันทึกเอง">
+        <i data-lucide="plus"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="app-main">
+    
+    <!-- PANEL 1: DASHBOARD -->
+    <section id="panel-dashboard" class="tab-panel active">
+      <!-- Dashboard Month Filter & Reset Button -->
+      <div class="dashboard-controls" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px;">
+        <select id="db-month-filter" class="form-control-compact" style="flex: 1; max-width: 180px; font-weight: 600; background-color: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary);">
+          <!-- Dynamic options -->
+        </select>
+        <button id="btn-reset-db" class="btn-secondary" style="font-size: 11px; padding: 6px 10px; color: var(--expense); border-color: rgba(239, 68, 68, 0.25); display: flex; align-items: center; gap: 4px; background-color: rgba(239, 68, 68, 0.05);">
+          <i data-lucide="rotate-ccw" style="width: 12px; height: 12px;"></i> ล้างข้อมูลจำลอง
+        </button>
+      </div>
+
+      <!-- Balance Cards -->
+      <div class="balance-card">
+        <div class="balance-label">ยอดเงินคงเหลือสุทธิ</div>
+        <div class="balance-amount" id="db-total-balance">฿0.00</div>
+        
+        <div class="balance-stats">
+          <div class="stat-item income">
+            <span class="stat-icon"><i data-lucide="arrow-down-left"></i></span>
+            <div class="stat-info">
+              <span class="stat-label">รายรับ</span>
+              <span class="stat-val" id="db-total-income">฿0.00</span>
+            </div>
+          </div>
+          <div class="stat-item expense">
+            <span class="stat-icon"><i data-lucide="arrow-up-right"></i></span>
+            <div class="stat-info">
+              <span class="stat-label">รายจ่าย</span>
+              <span class="stat-val" id="db-total-expense">฿0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="section-title">
+        <h2>ธุรกรรมด่วน</h2>
+      </div>
+      <div class="quick-scan-banner">
+        <div class="banner-icon">📂</div>
+        <div class="banner-text">
+          <h3>บันทึกรายจ่ายด้วยสลิป</h3>
+          <p>เลือกรูปสลิปหลายใบพร้อมกันเพื่อสแกนอัตโนมัติ</p>
+        </div>
+        <button class="btn-banner-action" onclick="switchTab('scan')">
+          ไปที่สแกนสลิป <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
+
+      <!-- Expense Chart & Analysis -->
+      <div class="chart-section card">
+        <h3>สัดส่วนค่าใช้จ่ายรายเดือน</h3>
+        <div class="chart-container">
+          <canvas id="expenseChart"></canvas>
+        </div>
+        <div id="chart-placeholder" class="chart-placeholder">
+          ยังไม่มีข้อมูลค่าใช้จ่ายสำหรับเดือนนี้
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 2: BATCH SCAN -->
+    <section id="panel-scan" class="tab-panel">
+      <div class="panel-header-simple">
+        <h2>สแกนสลิปจากแกลเลอรี</h2>
+        <p>นำเข้าสลิปโอนเงิน (สลิปจ่ายออก) หลายใบพร้อมกันเพื่อถอดข้อมูลและบันทึกอัตโนมัติ</p>
+      </div>
+
+      <!-- Upload Zone -->
+      <div class="upload-zone" id="upload-dropzone">
+        <div class="upload-icon-circle">
+          <i data-lucide="image"></i>
+        </div>
+        <h3>เลือกรูปสลิปจากแกลเลอรี</h3>
+        <p>รองรับไฟล์รูปภาพ JPG, PNG (เลือกพร้อมกันได้หลายรูป)</p>
+        <button class="btn-primary" id="btn-select-slips">
+          <i data-lucide="upload"></i> เลือกรูปภาพ
+        </button>
+        <input type="file" id="slip-file-input" accept="image/*" multiple style="display: none;">
+      </div>
+
+      <!-- Scanning Progress Queue -->
+      <div class="scanning-queue-section card" id="scanning-queue-card" style="display: none;">
+        <div class="queue-header">
+          <h3>กำลังสแกนสลิป...</h3>
+          <span class="queue-count" id="queue-progress-text">0 / 0</span>
+        </div>
+        <div class="progress-bar-wrapper">
+          <div class="progress-bar-fill" id="queue-progress-bar" style="width: 0%;"></div>
+        </div>
+        <div class="queue-list" id="queue-items-container">
+          <!-- Dynamically populated queuing files -->
+        </div>
+      </div>
+
+      <!-- Scanned Slips Result List -->
+      <div class="scanned-results-section" id="scanned-results-section" style="display: none;">
+        <div class="results-header">
+          <h3>รายการสลิปที่ถอดข้อมูลแล้ว</h3>
+          <button class="btn-success" id="btn-confirm-all">
+            <i data-lucide="check-check"></i> บันทึกทั้งหมด (<span id="confirm-count">0</span>)
+          </button>
+        </div>
+        
+        <div class="results-list" id="scanned-results-container">
+          <!-- Dynamically generated result forms -->
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 3: HISTORY -->
+    <section id="panel-history" class="tab-panel">
+      <div class="panel-header-simple">
+        <h2>ประวัติรายการเงิน</h2>
+        <p>รายการธุรกรรมและหนี้สินทั้งหมดที่บันทึกไว้ในเครื่อง</p>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-bar">
+        <select id="filter-type" class="form-control-compact">
+          <option value="all">ทุกประเภท</option>
+          <option value="income">เฉพาะรายรับ</option>
+          <option value="expense">เฉพาะรายจ่าย</option>
+          <option value="debt">เฉพาะหนี้สิน</option>
+        </select>
+        <select id="filter-category" class="form-control-compact">
+          <option value="all">ทุกหมวดหมู่</option>
+          <option value="🍔 ของกิน">🍔 ของกิน</option>
+          <option value="💸 โอนให้คนอื่น">💸 โอนให้คนอื่น</option>
+          <option value="🏠 รายจ่ายประจำเดือน">🏠 รายจ่ายประจำเดือน</option>
+          <option value="⚠️ รายจ่ายไม่คาดคิด">⚠️ รายจ่ายไม่คาดคิด</option>
+          <option value="🛒 รายจ่ายทั่วไป/อื่นๆ">🛒 รายจ่ายทั่วไป/อื่นๆ</option>
+          <option value="💰 รายรับ">💰 รายรับ</option>
+          <option value="🏦 หนี้สิน">🏦 หนี้สิน</option>
+        </select>
+      </div>
+
+      <!-- Transactions List -->
+      <div class="transactions-list-container" id="history-list-container">
+        <!-- Dynamically populated transaction cards -->
+      </div>
+    </section>
+
+    <!-- PANEL 4: RICH ADVISOR -->
+    <section id="panel-advisor" class="tab-panel">
+      <div class="panel-header-simple">
+        <h2>วิเคราะห์การเงินฉบับคนรวย</h2>
+        <p>คำแนะนำประเมินสุขภาพการเงินและรูรั่วไหลในสไตล์ Rich Mindset</p>
+      </div>
+
+      <!-- Monthly Summary Info -->
+      <div class="advisor-summary-card">
+        <div class="summary-title">สรุปสถานะเดือนนี้</div>
+        <div class="summary-grid">
+          <div class="summary-col">
+            <span class="col-label">เก็บออมได้</span>
+            <span class="col-value positive" id="adv-savings">฿0.00</span>
+          </div>
+          <div class="summary-col">
+            <span class="col-label">อัตราการออม</span>
+            <span class="col-value" id="adv-savings-rate">0%</span>
+          </div>
+        </div>
+        <div class="savings-progress-track">
+          <div class="savings-progress-fill" id="adv-savings-bar" style="width: 0%;"></div>
+        </div>
+        <p class="savings-feedback" id="adv-savings-feedback">กำลังคำนวณสัดส่วน...</p>
+      </div>
+
+      <!-- AI Mindset Advice -->
+      <div class="advisor-quote-card">
+        <div class="quote-header">
+          <span class="quote-tag">💡 Rich Mindset Advice</span>
+          <span class="advisor-status-active">วิเคราะห์สำเร็จ</span>
+        </div>
+        <div class="quote-body" id="adv-mindset-text">
+          ยินดีต้อนรับสู่โปรแกรมเลขาส่วนตัวการเงินของคุณ กรุณาเริ่มบันทึกข้อมูลรายรับและอัปโหลดสลิปรายจ่ายเพื่อรับคำวิเคราะห์ในสไตล์คนรวย
+        </div>
+      </div>
+
+      <!-- Dynamic Gemini AI Analysis Card (Optional) -->
+      <div class="card gemini-api-card">
+        <div class="gemini-header">
+          <span class="gemini-logo">🤖</span>
+          <div>
+            <h3>วิเคราะห์การเงินเชิงลึกด้วย Gemini AI</h3>
+            <p>กรอก API Key ฟรีเพื่อรับคำปรึกษาแบบโต้ตอบได้จริง</p>
+          </div>
+        </div>
+        
+        <div class="api-key-input-group">
+          <input type="password" id="gemini-api-key" placeholder="กรอก Gemini API Key ที่นี่..." class="form-control">
+          <button class="btn-secondary" id="btn-save-api-key">บันทึกคีย์</button>
+        </div>
+        <div class="api-key-help">
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">ขอ API Key ฟรีที่นี่ <i data-lucide="external-link"></i></a>
+        </div>
+
+        <div id="gemini-chat-section" class="gemini-chat-area" style="display: none;">
+          <div class="chat-log" id="gemini-chat-log">
+            <div class="chat-msg ai">สวัสดีครับ! ผมสามารถวิเคราะห์รายการบัญชีเดือนนี้ของคุณในสไตล์คนรวยและแนะนำวิธีออมหรือลดรายจ่ายได้อย่างละเอียด กดวิเคราะห์ด้านล่างได้เลยครับ</div>
+          </div>
+          <button class="btn-primary w-100" id="btn-ask-gemini-analysis">
+            <i data-lucide="sparkles"></i> เริ่มวิเคราะห์ด้วย AI อัจฉริยะ
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation Bar (App-like Feel) -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="switchTab('dashboard')">
+      <i data-lucide="layout-dashboard"></i>
+      <span>หน้าหลัก</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('scan')">
+      <div class="scan-button-glow">
+        <i data-lucide="scan"></i>
+      </div>
+      <span>สแกนสลิป</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('history')">
+      <i data-lucide="history"></i>
+      <span>ประวัติ</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('advisor')">
+      <i data-lucide="brain-circuit"></i>
+      <span>วิเคราะห์</span>
+    </button>
+  </nav>
+
+  <!-- MODAL: ADD MANUAL TRANSACTION -->
+  <div class="modal-overlay" id="modal-add-transaction">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>บันทึกข้อมูลการเงิน</h2>
+        <button class="btn-close-modal" id="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-manual-transaction">
+          <!-- Type Select -->
+          <div class="form-group">
+            <label>ประเภทรายการ</label>
+            <div class="segmented-control">
+              <input type="radio" id="type-income" name="tx-type" value="income" checked>
+              <label for="type-income" class="segmented-btn">💰 รายรับ</label>
+              
+              <input type="radio" id="type-expense" name="tx-type" value="expense">
+              <label for="type-expense" class="segmented-btn">💸 รายจ่าย</label>
+
+              <input type="radio" id="type-debt" name="tx-type" value="debt">
+              <label for="type-debt" class="segmented-btn">🏦 หนี้สิน</label>
+            </div>
+          </div>
+
+          <!-- Amount -->
+          <div class="form-group">
+            <label for="tx-amount">จำนวนเงิน (บาท)</label>
+            <input type="number" id="tx-amount" step="0.01" min="0.01" class="form-control" placeholder="0.00" required>
+          </div>
+
+          <!-- Title / Note -->
+          <div class="form-group">
+            <label for="tx-title" id="lbl-tx-title">รายการ / ผู้โอน</label>
+            <input type="text" id="tx-title" class="form-control" placeholder="เช่น เงินเดือน, โอนให้สมชาย" required>
+          </div>
+
+          <!-- Category -->
+          <div class="form-group" id="form-group-category">
+            <label for="tx-category">หมวดหมู่</label>
+            <select id="tx-category" class="form-control">
+              <option value="🍔 ของกิน">🍔 ของกิน</option>
+              <option value="💸 โอนให้คนอื่น">💸 โอนให้คนอื่น</option>
+              <option value="🏠 รายจ่ายประจำเดือน">🏠 รายจ่ายประจำเดือน</option>
+              <option value="⚠️ รายจ่ายไม่คาดคิด">⚠️ รายจ่ายไม่คาดคิด</option>
+              <option value="🛒 รายจ่ายทั่วไป/อื่นๆ">🛒 รายจ่ายทั่วไป/อื่นๆ</option>
+            </select>
+          </div>
+
+          <!-- Date -->
+          <div class="form-group">
+            <label for="tx-date">วันที่ทำรายการ</label>
+            <input type="date" id="tx-date" class="form-control" required>
+          </div>
+
+          <button type="submit" class="btn-primary w-100" style="margin-top: 15px;">
+            <i data-lucide="save"></i> บันทึกข้อมูล
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- CDN scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
