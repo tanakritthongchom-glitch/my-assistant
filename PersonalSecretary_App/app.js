@@ -1150,9 +1150,23 @@ async function runGeminiAnalysis() {
     
   } catch (err) {
     console.error(err);
+    let diagInfo = '';
+    try {
+      const diagRes = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${geminiApiKey}`);
+      const diagData = await diagRes.json();
+      if (diagData.error) {
+        diagInfo = `\n\n[วินิจฉัยจาก Google: ${diagData.error.message} (สถานะ: ${diagData.error.status}, รหัส: ${diagData.error.code})]`;
+      } else if (diagData.models) {
+        const list = diagData.models.map(m => m.name.replace('models/', '')).join(', ');
+        diagInfo = `\n\n[บัญชีคุณมีรุ่นโมเดลให้ใช้ได้แก่: ${list}]`;
+      }
+    } catch (diagErr) {
+      diagInfo = `\n\n[ไม่สามารถดึงข้อมูลวินิจฉัยได้: ${diagErr.message}]`;
+    }
+
     const errorMsgDiv = document.createElement('div');
     errorMsgDiv.className = 'chat-msg ai';
-    errorMsgDiv.textContent = `เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI: ${err.message}. กรุณาตรวจสอบว่า API Key ถูกต้องและอินเทอร์เน็ตยังใช้งานได้ดีครับ`;
+    errorMsgDiv.textContent = `เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI: ${err.message}.${diagInfo}\n\nกรุณาตรวจสอบว่า API Key ถูกต้องและอินเทอร์เน็ตยังใช้งานได้ดีครับ`;
     geminiChatLog.appendChild(errorMsgDiv);
   }
 
