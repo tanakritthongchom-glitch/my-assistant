@@ -216,12 +216,15 @@ function setupEventListeners() {
   // Gemini API Key management
   btnSaveApiKey.addEventListener('click', () => {
     const key = geminiApiKeyInput.value.trim();
+    if (key === '••••••••••••••••••••') {
+      alert('คีย์ปัจจุบันถูกเปิดใช้งานและบันทึกอยู่แล้วครับ');
+      return;
+    }
     if (key) {
       geminiApiKey = key;
       localStorage.setItem('secretary_gemini_key', key);
       alert('บันทึก API Key เรียบร้อยแล้ว!');
       geminiChatSection.style.display = 'flex';
-      geminiApiKeyInput.value = '••••••••••••••••••••';
     } else {
       geminiApiKey = '';
       localStorage.removeItem('secretary_gemini_key');
@@ -330,7 +333,7 @@ function loadData() {
   const storedKey = localStorage.getItem('secretary_gemini_key');
   if (storedKey) {
     geminiApiKey = storedKey;
-    geminiApiKeyInput.value = '••••••••••••••••••••';
+    geminiApiKeyInput.value = storedKey;
     geminiChatSection.style.display = 'flex';
   }
 }
