@@ -24,6 +24,62 @@ let transactions = [];
 let chartInstance = null;
 let geminiApiKey = '';
 
+// IndexedDB setup for storing binary Slip Images locally
+const DB_NAME = 'SecretaryFinanceDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'slips';
+let db = null;
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = (e) => reject(e.target.error);
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      resolve(db);
+    };
+    request.onupgradeneeded = (e) => {
+      const dbInstance = e.target.result;
+      if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
+        dbInstance.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+}
+
+function saveSlipImage(txId, fileBlob) {
+  if (!db) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(fileBlob, txId);
+    request.onsuccess = () => resolve();
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function getSlipImage(txId) {
+  if (!db) return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(txId);
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function deleteSlipImage(txId) {
+  if (!db) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(txId);
+    request.onsuccess = () => resolve();
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
 
 // DOM Elements
 const panels = document.querySelectorAll('.tab-panel');
@@ -72,6 +128,19 @@ const btnRunWealthSimulation = document.getElementById('btn-run-wealth-simulatio
 const wealthSimResults = document.getElementById('wealth-sim-results');
 const wealthSimText = document.getElementById('wealth-sim-text');
 
+// Slip Viewer & Editor Elements
+let currentEditingTxId = null;
+const modalViewSlip = document.getElementById('modal-view-slip');
+const btnCloseSlipModal = document.getElementById('btn-close-slip-modal');
+const btnCancelSlipModal = document.getElementById('btn-cancel-slip-modal');
+const btnSaveSlipCategory = document.getElementById('btn-save-slip-category');
+const slipDetailTitle = document.getElementById('slip-detail-title');
+const slipDetailAmount = document.getElementById('slip-detail-amount');
+const slipDetailDate = document.getElementById('slip-detail-date');
+const slipDetailCategorySelect = document.getElementById('slip-detail-category-select');
+const slipDetailImg = document.getElementById('slip-detail-img');
+const slipDetailImgPlaceholder = document.getElementById('slip-detail-img-placeholder');
+
 // Category list
 const categories = [
   "🍔 ของกิน",
@@ -82,9 +151,17 @@ const categories = [
 ];
 
 // Initialize Application
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Load Lucide Icons
   lucide.createIcons();
+
+  // Initialize Local database for slips
+  try {
+    await initDB();
+    console.log('IndexedDB initialized successfully.');
+  } catch (err) {
+    console.error('IndexedDB failed to initialize:', err);
+  }
 
   // Set today as default date in form
   document.getElementById('tx-date').valueAsDate = new Date();
@@ -257,6 +334,24 @@ function setupEventListeners() {
     importFileInput.addEventListener('change', (e) => {
       if (e.target.files.length > 0) {
         importData(e.target.files[0]);
+      }
+    });
+  }
+
+  // Slip Viewer Modal Listeners
+  if (btnCloseSlipModal) {
+    btnCloseSlipModal.addEventListener('click', closeSlipModal);
+  }
+  if (btnCancelSlipModal) {
+    btnCancelSlipModal.addEventListener('click', closeSlipModal);
+  }
+  if (btnSaveSlipCategory) {
+    btnSaveSlipCategory.addEventListener('click', saveSlipCategory);
+  }
+  if (modalViewSlip) {
+    modalViewSlip.addEventListener('click', (e) => {
+      if (e.target === modalViewSlip) {
+        closeSlipModal();
       }
     });
   }
@@ -519,16 +614,27 @@ function renderHistory() {
           ${emoji}
         </div>
         <div class="tx-details">
-          <span class="tx-title">${tx.title}</span>
+          <span class="tx-title" style="cursor: pointer;" onclick="openSlipModal('${tx.id}')">${tx.title}</span>
           <div class="tx-sub-info">
             <span>${formatDateThai(tx.date)}</span>
-            <span class="tag-category" data-category="${tx.category}">${tx.category}</span>
+            <span class="tag-category" data-category="${tx.category}" style="cursor: pointer;" onclick="openSlipModal('${tx.id}')">${tx.category}</span>
           </div>
         </div>
       </div>
-      <div class="tx-right">
-        <span class="tx-amount ${typeClass}">${prefix} ฿${tx.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-        <button class="btn-delete-tx" onclick="deleteTransaction('${tx.id}')">
+      <div class="tx-right" style="display: flex; align-items: center; gap: 8px;">
+        <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+          <span class="tx-amount ${typeClass}">${prefix} ฿${tx.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+          ${tx.hasSlip ? `
+          <button onclick="openSlipModal('${tx.id}')" style="margin-top: 4px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--income); border-radius: 4px; padding: 2px 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 9px;">
+            <i data-lucide="receipt" style="width: 10px; height: 10px;"></i> ดูสลิป
+          </button>
+          ` : `
+          <button onclick="openSlipModal('${tx.id}')" style="margin-top: 4px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; padding: 2px 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 9px;">
+            <i data-lucide="edit-3" style="width: 10px; height: 10px;"></i> แก้หมวด
+          </button>
+          `}
+        </div>
+        <button class="btn-delete-tx" onclick="deleteTransaction('${tx.id}')" style="align-self: center;">
           <i data-lucide="trash-2"></i>
         </button>
       </div>
@@ -730,6 +836,7 @@ async function processNextInQueue(index) {
     const result = await scanSlipImage(file);
     statusSpan.className = 'queue-item-status success';
     statusSpan.innerHTML = `<i data-lucide="check"></i> สำเร็จ`;
+    result.fileBlob = file; // Save the file Blob object inside the result!
     processedResults.push(result);
   } catch (error) {
     console.error('Scan error:', error);
@@ -742,7 +849,8 @@ async function processNextInQueue(index) {
       title: 'สลิปที่ไม่สำเร็จ: ' + file.name,
       category: '🛒 รายจ่ายทั่วไป/อื่นๆ',
       date: new Date().toISOString().split('T')[0],
-      error: true
+      error: true,
+      fileBlob: file // Save the file Blob object here too!
     });
   }
 
@@ -990,14 +1098,26 @@ function saveAllScannedResults() {
     const dateVal = document.getElementById(`res-date-${idx}`).value;
 
     if (titleVal && !isNaN(amountVal) && amountVal > 0) {
+      const txId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + idx;
+      const hasSlip = !!res.fileBlob;
+
       const tx = {
-        id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + idx,
+        id: txId,
         type: 'expense',
         amount: amountVal,
         title: titleVal,
         category: categoryVal,
-        date: dateVal
+        date: dateVal,
+        hasSlip: hasSlip
       };
+
+      // Save slip image to IndexedDB
+      if (hasSlip) {
+        saveSlipImage(txId, res.fileBlob)
+          .then(() => console.log('Slip saved:', txId))
+          .catch(err => console.error('Slip save error:', err));
+      }
+
       // Insert to head of transactions array
       transactions.unshift(tx);
       count++;
@@ -1579,4 +1699,99 @@ function formatMonthThaiShort(ymStr) {
   const mIdx = parseInt(month) - 1;
   const yrTwoDigits = String(parseInt(year) + 543).slice(-2);
   return `${shortMonths[mIdx]} ${yrTwoDigits}`;
+}
+
+// Open Slip Viewer & Category Editor Modal
+async function openSlipModal(txId) {
+  const tx = transactions.find(t => t.id === txId);
+  if (!tx) return;
+
+  currentEditingTxId = txId;
+
+  // Set text details
+  slipDetailTitle.textContent = tx.title;
+  slipDetailAmount.textContent = '฿' + tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  
+  // Set amount color based on type
+  if (tx.type === 'income') {
+    slipDetailAmount.style.color = 'var(--income)';
+  } else if (tx.type === 'debt') {
+    slipDetailAmount.style.color = 'var(--text-primary)';
+  } else {
+    slipDetailAmount.style.color = 'var(--expense)';
+  }
+
+  slipDetailDate.textContent = formatDateThai(tx.date);
+  slipDetailCategorySelect.value = tx.category;
+
+  // Render slip image if exists
+  if (tx.hasSlip) {
+    slipDetailImg.style.display = 'none';
+    slipDetailImgPlaceholder.style.display = 'block';
+    slipDetailImgPlaceholder.textContent = 'กำลังโหลดรูปภาพสลิป...';
+
+    try {
+      const blob = await getSlipImage(txId);
+      if (blob) {
+        // Revoke any previous object URL to avoid leak
+        if (slipDetailImg.src && slipDetailImg.src.startsWith('blob:')) {
+          URL.revokeObjectURL(slipDetailImg.src);
+        }
+
+        const imgUrl = URL.createObjectURL(blob);
+        slipDetailImg.src = imgUrl;
+        slipDetailImg.style.display = 'block';
+        slipDetailImgPlaceholder.style.display = 'none';
+      } else {
+        slipDetailImgPlaceholder.textContent = 'ไม่พบรูปสลิปในเครื่องนี้ (อาจถูกลบหรือจัดเก็บในเครื่องอื่น)';
+      }
+    } catch (err) {
+      console.error('Error fetching slip image:', err);
+      slipDetailImgPlaceholder.textContent = 'เกิดข้อผิดพลาดในการโหลดรูปภาพสลิป';
+    }
+  } else {
+    slipDetailImg.style.display = 'none';
+    slipDetailImgPlaceholder.style.display = 'block';
+    slipDetailImgPlaceholder.textContent = 'ไม่มีรูปสลิปแนบไว้สำหรับรายการนี้ (ทำรายการบันทึกมือ)';
+  }
+
+  // Show Modal Overlay
+  modalViewSlip.classList.add('active');
+}
+
+// Close Slip Viewer Modal
+function closeSlipModal() {
+  modalViewSlip.classList.remove('active');
+  
+  // Revoke object URL
+  if (slipDetailImg.src && slipDetailImg.src.startsWith('blob:')) {
+    URL.revokeObjectURL(slipDetailImg.src);
+  }
+  slipDetailImg.src = '';
+  currentEditingTxId = null;
+}
+
+// Save Category Edit
+function saveSlipCategory() {
+  if (!currentEditingTxId) return;
+
+  const tx = transactions.find(t => t.id === currentEditingTxId);
+  if (tx) {
+    const oldCat = tx.category;
+    const newCat = slipDetailCategorySelect.value;
+    
+    if (oldCat !== newCat) {
+      tx.category = newCat;
+      saveTransactions();
+      
+      // Update UI panels
+      updateDashboard();
+      renderHistory();
+      updateAdvisor();
+      
+      console.log(`Updated transaction ${currentEditingTxId} category from ${oldCat} to ${newCat}`);
+    }
+  }
+
+  closeSlipModal();
 }
