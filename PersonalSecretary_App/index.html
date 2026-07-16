@@ -224,6 +224,47 @@
         </div>
       </div>
 
+      <!-- Monthly Reports & Scorecard Comparison -->
+      <div class="card monthly-report-card">
+        <h3>รายงานประวัติการเงินรายเดือน</h3>
+        <p class="subtitle" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; margin-top: 2px;">เปรียบเทียบแนวโน้มรายรับ-รายจ่ายที่ผ่านมา</p>
+        
+        <!-- Bar Chart Container -->
+        <div class="chart-container-bar" id="monthly-bar-chart-container" style="position: relative; width: 100%; height: 180px; margin-bottom: 16px; display: none;">
+          <canvas id="monthlyComparisonChart"></canvas>
+        </div>
+        <div id="bar-chart-placeholder" class="chart-placeholder" style="margin-bottom: 16px;">
+          ต้องมีข้อมูลอย่างน้อย 2 เดือนขึ้นไปเพื่อคำนวณกราฟแท่งเปรียบเทียบ
+        </div>
+
+        <!-- Grade Scorecard Table -->
+        <div class="scorecard-title" style="font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">ผลประเมินสุขภาพการเงินย้อนหลัง</div>
+        <div class="scorecard-list" id="monthly-grades-container" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Dynamically populated monthly scorecard cards -->
+        </div>
+      </div>
+
+      <!-- App Data Management (Backup & Restore) -->
+      <div class="card backup-restore-card">
+        <div class="gemini-header">
+          <span class="gemini-logo">📂</span>
+          <div>
+            <h3>สำรองข้อมูล / ย้ายเครื่อง</h3>
+            <p>บันทึกประวัติการเงินลงในไฟล์ หรือนำเข้าจากเครื่องอื่น</p>
+          </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+          <button class="btn-secondary" id="btn-export-data" style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <i data-lucide="download" style="width: 14px; height: 14px;"></i> ส่งออกข้อมูล
+          </button>
+          <button class="btn-secondary" id="btn-import-trigger" style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <i data-lucide="upload" style="width: 14px; height: 14px;"></i> นำเข้าข้อมูล
+          </button>
+          <input type="file" id="import-file-input" accept=".json" style="display: none;">
+        </div>
+      </div>
+
       <!-- Dynamic Gemini AI Analysis Card (Optional) -->
       <div class="card gemini-api-card">
         <div class="gemini-header">

@@ -1,8 +1,20 @@
-// Register PWA Service Worker
+// Register PWA Service Worker & Handle Auto Update
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('Service Worker registered successfully:', reg.scope))
+      .then(reg => {
+        console.log('Service Worker registered successfully:', reg.scope);
+        // Listen for new service worker installs to reload and apply updates immediately
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('New app version detected. Auto-reloading...');
+              window.location.reload();
+            }
+          });
+        });
+      })
       .catch(err => console.log('Service Worker registration failed:', err));
   });
 }
@@ -240,6 +252,25 @@ function setupEventListeners() {
         renderHistory();
         updateAdvisor();
         alert('ล้างข้อมูลสำเร็จแล้ว! คุณสามารถเริ่มต้นบันทึกข้อมูลการเงินจริงของคุณได้ทันที');
+      }
+    });
+  }
+
+  // Backup & Restore listeners
+  const btnExport = document.getElementById('btn-export-data');
+  if (btnExport) {
+    btnExport.addEventListener('click', exportData);
+  }
+
+  const btnImportTrigger = document.getElementById('btn-import-trigger');
+  const importFileInput = document.getElementById('import-file-input');
+  if (btnImportTrigger && importFileInput) {
+    btnImportTrigger.addEventListener('click', () => {
+      importFileInput.click();
+    });
+    importFileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        importData(e.target.files[0]);
       }
     });
   }
@@ -644,6 +675,9 @@ function updateAdvisor() {
 
   advSavingsFeedback.textContent = feedback;
   advMindsetText.innerText = advice;
+
+  // Render monthly comparison report (bar chart & grades scorecard)
+  renderMonthlyComparisonReport();
 }
 
 // Slip File Queue Handling (Batch Scan)
@@ -1084,7 +1118,7 @@ async function runGeminiAnalysis() {
   geminiChatLog.scrollTop = geminiChatLog.scrollHeight;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1224,4 +1258,256 @@ function formatMonthThai(ymStr) {
   const mIdx = parseInt(month) - 1;
   const yrThai = parseInt(year) + 543;
   return `${thaiMonths[mIdx]} ${yrThai}`;
+}
+
+// Export data to JSON backup file
+function exportData() {
+  if (transactions.length === 0) {
+    alert('ไม่มีข้อมูลในระบบที่สามารถส่งออกได้');
+    return;
+  }
+  
+  const dataObject = {
+    appName: "PersonalSecretary_App",
+    version: "2.0",
+    exportDate: new Date().toISOString(),
+    transactions: transactions,
+    geminiApiKey: localStorage.getItem('secretary_gemini_key') || ''
+  };
+
+  const jsonString = JSON.stringify(dataObject, null, 2);
+  const blob = new Blob([jsonString], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `financial_secretary_backup_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Import data from JSON backup file
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const dataObject = JSON.parse(e.target.result);
+      
+      // Validation check
+      if (dataObject.appName !== "PersonalSecretary_App" || !Array.isArray(dataObject.transactions)) {
+        alert('ไฟล์สำรองข้อมูลไม่ถูกต้อง กรุณาอัปโหลดไฟล์ของแอปเลขาส่วนตัวเท่านั้น');
+        return;
+      }
+
+      if (confirm(`⚠️ ยืนยันการนำเข้าข้อมูล? การทำงานนี้จะนำรายการบันทึกจำนวน ${dataObject.transactions.length} รายการเข้ามาแทนที่ข้อมูลปัจจุบันทั้งหมดในเครื่องนี้`)) {
+        transactions = dataObject.transactions;
+        saveTransactions();
+        
+        if (dataObject.geminiApiKey) {
+          geminiApiKey = dataObject.geminiApiKey;
+          localStorage.setItem('secretary_gemini_key', geminiApiKey);
+          geminiApiKeyInput.value = '••••••••••••••••••••';
+          geminiChatSection.style.display = 'flex';
+        }
+
+        populateMonthFilter();
+        updateDashboard();
+        renderHistory();
+        updateAdvisor();
+        alert('นำเข้าข้อมูลการเงินสำเร็จเรียบร้อยแล้ว!');
+        // Reset file input value
+        document.getElementById('import-file-input').value = '';
+      }
+    } catch (err) {
+      alert('เกิดข้อผิดพลาดในการอ่านไฟล์สำรองข้อมูล: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Global variable for comparative bar chart instance
+let barChartInstance = null;
+
+// Render monthly comparative report (chart & scorecard grades)
+function renderMonthlyComparisonReport() {
+  const barChartCanvas = document.getElementById('monthlyComparisonChart');
+  const barChartContainer = document.getElementById('monthly-bar-chart-container');
+  const barChartPlaceholder = document.getElementById('bar-chart-placeholder');
+  const gradesContainer = document.getElementById('monthly-grades-container');
+  
+  if (!barChartCanvas || !gradesContainer) return;
+
+  // Group transactions by month (YYYY-MM)
+  const monthlyStats = {};
+
+  transactions.forEach(tx => {
+    if (!tx.date) return;
+    const monthKey = tx.date.substr(0, 7); // YYYY-MM
+    if (!monthKey.match(/^\d{4}-\d{2}$/)) return;
+
+    if (!monthlyStats[monthKey]) {
+      monthlyStats[monthKey] = { income: 0, expense: 0 };
+    }
+
+    if (tx.type === 'income') {
+      monthlyStats[monthKey].income += tx.amount;
+    } else if (tx.type === 'expense') {
+      monthlyStats[monthKey].expense += tx.amount;
+    }
+  });
+
+  const monthKeys = Object.keys(monthlyStats).sort(); // Sort chronological ascending
+
+  // If we have less than 1 month, show placeholder and empty container
+  if (monthKeys.length === 0) {
+    if (barChartContainer) barChartContainer.style.display = 'none';
+    if (barChartPlaceholder) barChartPlaceholder.style.display = 'flex';
+    gradesContainer.innerHTML = `<div class="chart-placeholder">ยังไม่มีประวัติการเงินรายเดือน</div>`;
+    return;
+  }
+
+  // Draw comparative bar chart
+  // Show chart if there are 2 or more months, else show placeholder
+  if (monthKeys.length >= 2) {
+    if (barChartContainer) barChartContainer.style.display = 'block';
+    if (barChartPlaceholder) barChartPlaceholder.style.display = 'none';
+
+    const labels = monthKeys.map(m => formatMonthThaiShort(m));
+    const incomeData = monthKeys.map(m => monthlyStats[m].income);
+    const expenseData = monthKeys.map(m => monthlyStats[m].expense);
+
+    if (barChartInstance) {
+      barChartInstance.destroy();
+    }
+
+    barChartInstance = new Chart(barChartCanvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'รายรับ (฿)',
+            data: incomeData,
+            backgroundColor: '#10b981', // Emerald Green
+            borderRadius: 4
+          },
+          {
+            label: 'รายจ่าย (฿)',
+            data: expenseData,
+            backgroundColor: '#ef4444', // Rose Red
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '#94a3b8', font: { family: 'Sarabun', size: 9 } }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#94a3b8', font: { family: 'Outfit', size: 9 } }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: '#94a3b8',
+              font: { family: 'Sarabun', size: 9 },
+              boxWidth: 10
+            }
+          }
+        }
+      }
+    });
+  } else {
+    if (barChartContainer) barChartContainer.style.display = 'none';
+    if (barChartPlaceholder) barChartPlaceholder.style.display = 'flex';
+    barChartPlaceholder.textContent = 'ต้องมีข้อมูลอย่างน้อย 2 เดือนขึ้นไปเพื่อคำนวณกราฟแท่งเปรียบเทียบ';
+  }
+
+  // Render Grade Scorecard List (descending order)
+  gradesContainer.innerHTML = '';
+  const descMonths = [...monthKeys].reverse();
+
+  descMonths.forEach(m => {
+    const stats = monthlyStats[m];
+    const net = stats.income - stats.expense;
+    let savingsRate = 0;
+    if (stats.income > 0) {
+      savingsRate = Math.round((net / stats.income) * 100);
+    } else {
+      savingsRate = stats.expense > 0 ? -100 : 0;
+    }
+
+    // Determine grade & badge
+    let grade = 'C';
+    let gradeColor = '#f59e0b'; // Amber
+    let gradeName = 'พอใช้';
+
+    if (savingsRate >= 30) {
+      grade = 'A';
+      gradeColor = '#10b981'; // Green
+      gradeName = 'มหาเศรษฐี';
+    } else if (savingsRate >= 15) {
+      grade = 'B';
+      gradeColor = '#3b82f6'; // Blue
+      gradeName = 'วินัยดี';
+    } else if (savingsRate < 0) {
+      grade = 'D';
+      gradeColor = '#ef4444'; // Red
+      gradeName = 'เงินติดลบ';
+    }
+
+    const card = document.createElement('div');
+    card.className = 'monthly-grade-item';
+    card.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid ${gradeColor};
+      border-radius: 8px;
+      margin-bottom: 4px;
+    `;
+
+    card.innerHTML = `
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">${formatMonthThai(m)}</div>
+        <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">
+          รับ: <span style="color: var(--income);">฿${stats.income.toLocaleString()}</span> | 
+          จ่าย: <span style="color: var(--expense);">฿${stats.expense.toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="text-align: right; display: flex; align-items: center; gap: 10px;">
+        <div>
+          <div style="font-size: 14px; font-weight: 800; color: ${gradeColor};">เกรด ${grade}</div>
+          <div style="font-size: 9px; color: var(--text-muted);">${gradeName} (${savingsRate}%)</div>
+        </div>
+      </div>
+    `;
+    
+    gradesContainer.appendChild(card);
+  });
+}
+
+// Helper to format year-month (e.g. 2026-07) to short Thai (ก.ค. 69)
+function formatMonthThaiShort(ymStr) {
+  if (!ymStr) return '';
+  const [year, month] = ymStr.split('-');
+  const shortMonths = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+  ];
+  const mIdx = parseInt(month) - 1;
+  const yrTwoDigits = String(parseInt(year) + 543).slice(-2);
+  return `${shortMonths[mIdx]} ${yrTwoDigits}`;
 }
