@@ -1097,6 +1097,12 @@ async function runGeminiAnalysis() {
     });
 
     const data = await response.json();
+    if (data.error) {
+      throw new Error(data.error.message || 'Unknown API error');
+    }
+    if (!data.candidates || data.candidates.length === 0) {
+      throw new Error('API did not return any candidates. It might be blocked by safety settings or region restrictions.');
+    }
     const replyText = data.candidates[0].content.parts[0].text;
 
     // Add AI Response to Chat Log
