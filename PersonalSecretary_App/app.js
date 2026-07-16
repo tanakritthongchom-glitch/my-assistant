@@ -65,12 +65,12 @@ const advSavingsBar = document.getElementById('adv-savings-bar');
 const advSavingsFeedback = document.getElementById('adv-savings-feedback');
 const advMindsetText = document.getElementById('adv-mindset-text');
 
-// Gemini Elements
-const geminiApiKeyInput = document.getElementById('gemini-api-key');
-const btnSaveApiKey = document.getElementById('btn-save-api-key');
-const geminiChatSection = document.getElementById('gemini-chat-section');
-const geminiChatLog = document.getElementById('gemini-chat-log');
-const btnAskGemini = document.getElementById('btn-ask-gemini-analysis');
+// Wealth Simulator Elements
+const wealthTargetInput = document.getElementById('wealth-target-input');
+const wealthInterestInput = document.getElementById('wealth-interest-input');
+const btnRunWealthSimulation = document.getElementById('btn-run-wealth-simulation');
+const wealthSimResults = document.getElementById('wealth-sim-results');
+const wealthSimText = document.getElementById('wealth-sim-text');
 
 // Category list
 const categories = [
@@ -213,27 +213,10 @@ function setupEventListeners() {
   filterType.addEventListener('change', renderHistory);
   filterCategory.addEventListener('change', renderHistory);
 
-  // Gemini API Key management
-  btnSaveApiKey.addEventListener('click', () => {
-    const key = geminiApiKeyInput.value.trim();
-    if (key === '••••••••••••••••••••') {
-      alert('คีย์ปัจจุบันถูกเปิดใช้งานและบันทึกอยู่แล้วครับ');
-      return;
-    }
-    if (key) {
-      geminiApiKey = key;
-      localStorage.setItem('secretary_gemini_key', key);
-      alert('บันทึก API Key เรียบร้อยแล้ว!');
-      geminiChatSection.style.display = 'flex';
-    } else {
-      geminiApiKey = '';
-      localStorage.removeItem('secretary_gemini_key');
-      alert('ลบ API Key เรียบร้อยแล้ว');
-      geminiChatSection.style.display = 'none';
-    }
-  });
-
-  btnAskGemini.addEventListener('click', runGeminiAnalysis);
+  // Wealth Simulator Event Listener
+  if (btnRunWealthSimulation) {
+    btnRunWealthSimulation.addEventListener('click', runWealthSimulation);
+  }
 
   // Month filter change triggers dashboard update
   const dbMonthFilter = document.getElementById('db-month-filter');
@@ -329,13 +312,6 @@ function loadData() {
     saveTransactions();
   }
 
-  // Load Gemini Key
-  const storedKey = localStorage.getItem('secretary_gemini_key');
-  if (storedKey) {
-    geminiApiKey = storedKey;
-    geminiApiKeyInput.value = storedKey;
-    geminiChatSection.style.display = 'flex';
-  }
 }
 
 // Get standard date relative to today for mockups
@@ -1044,16 +1020,17 @@ function saveAllScannedResults() {
 }
 
 // Perform AI Analysis using free Gemini API Key Client-Side
-async function runGeminiAnalysis() {
-  if (!geminiApiKey) {
-    alert('กรุณากรอก Gemini API Key ก่อนเริ่มการวิเคราะห์');
-    return;
-  }
+// Local Intelligent Wealth Simulation Engine (No API Key Required!)
+function runWealthSimulation() {
+  const targetVal = parseFloat(wealthTargetInput.value) || 1000000;
+  const interestAnnual = parseFloat(wealthInterestInput.value) || 6;
 
-  // Calculate numbers
+  // 1. Calculate financials for selected month (mirroring dashboard data)
+  const monthFilter = document.getElementById('db-month-filter');
+  const selectedMonth = monthFilter ? monthFilter.value : 'all';
+
   let totalIncome = 0;
   let totalExpense = 0;
-  
   const categorySums = {
     "🍔 ของกิน": 0,
     "💸 โอนให้คนอื่น": 0,
@@ -1062,7 +1039,13 @@ async function runGeminiAnalysis() {
     "🛒 รายจ่ายทั่วไป/อื่นๆ": 0
   };
 
-  transactions.forEach(tx => {
+  // Filter transactions based on selected month
+  const filteredTxs = transactions.filter(tx => {
+    if (selectedMonth === 'all') return true;
+    return tx.date.startsWith(selectedMonth);
+  });
+
+  filteredTxs.forEach(tx => {
     if (tx.type === 'income') {
       totalIncome += tx.amount;
     } else if (tx.type === 'expense') {
@@ -1076,107 +1059,176 @@ async function runGeminiAnalysis() {
   });
 
   const netSavings = totalIncome - totalExpense;
-  const savingsRate = totalIncome > 0 ? ((netSavings / totalIncome) * 100).toFixed(1) : 0;
+  const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0;
 
-  // Build prompt summarizing transactions
-  const txSummaryText = transactions.slice(0, 30).map(t => `- ${t.date} | [${t.type}] ${t.title} | หมวด: ${t.category} | ยอด: ฿${t.amount.toLocaleString()}`).join('\n');
+  // Show results block
+  wealthSimResults.style.display = 'flex';
 
-  const prompt = `
-  คุณคือ 'เลขาการเงินอัจฉริยะฉบับคนรวย' (Rich Mindset Financial Advisor)
-  หน้าที่ของคุณคือวิเคราะห์ข้อมูลรายรับรายจ่ายของเจ้านาย แล้วให้ข้อเสนอแนะในการลดรายจ่าย เพิ่มเงินออม และแนะนำวิธีการจัดการเงินตามหลักของความมั่งคั่งมหาเศรษฐี (เช่น การนำเงินไปต่อยอดซื้อทรัพย์สินแทนหนี้สิน, การอุดรอยรั่วไหลของเงิน, วินัยทางการเงิน)
-  ข้อควรจำ: ใช้น้ำเสียงฉลาด คมคาย และสร้างแรงบันดาลใจ (สไตล์คนรวยคุยกับหุ้นส่วน)
+  // 2. Generate simulation report
+  let reportHTML = '';
 
-  ข้อมูลทางการเงินในเดือนนี้:
-  - รายรับทั้งหมด: ฿${totalIncome.toLocaleString()}
-  - รายจ่ายทั้งหมด: ฿${totalExpense.toLocaleString()}
-  - ยอดเงินคงเหลือออมได้: ฿${netSavings.toLocaleString()} (อัตราการออม: ${savingsRate}%)
-  - สรุปรายจ่ายแยกหมวดหมู่:
-    * ของกิน: ฿${categorySums["🍔 ของกิน"].toLocaleString()}
-    * โอนให้คนอื่น: ฿${categorySums["💸 โอนให้คนอื่น"].toLocaleString()}
-    * รายจ่ายประจำเดือน (ค่าเช่า/ค่าน้ำไฟ/เน็ต): ฿${categorySums["🏠 รายจ่ายประจำเดือน"].toLocaleString()}
-    * รายจ่ายไม่คาดคิด (ซ่อมแซม/ฉุกเฉิน): ฿${categorySums["⚠️ รายจ่ายไม่คาดคิด"].toLocaleString()}
-    * รายจ่ายทั่วไป/อื่นๆ: ฿${categorySums["🛒 รายจ่ายทั่วไป/อื่นๆ"].toLocaleString()}
+  // Case A: Savings is negative or zero
+  if (netSavings <= 0) {
+    reportHTML = `
+      <div style="color: var(--expense); font-weight: 700; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+        <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> แจ้งเตือน: ไม่สามารถคำนวณเป้าหมายความมั่งคั่งได้
+      </div>
+      <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 11px;">ในเดือนปัจจุบันนี้ คุณมียอดเงินคงเหลือออมสุทธิเป็น <b>฿${netSavings.toLocaleString()}</b> (ติดลบหรือเท่ากับศูนย์) อัตราการออม: <b>${savingsRate.toFixed(1)}%</b></p>
+      
+      <div style="background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <div style="font-weight: 700; font-size: 11px; margin-bottom: 4px; color: var(--expense);">คำแนะนำจาก เลขาการเงินอัจฉริยะ (Rich Mindset Advice)</div>
+        <p style="font-size: 11px; line-height: 1.5; color: var(--text-muted);">
+          💬 <i>"คนทั่วไปมีชีวิตอยู่เพื่อใช้จ่ายสิ่งที่เหลือจากการเก็บออม ส่วนคนรวยออมเงินก่อนจะนำไปใช้จ่ายที่เหลือ"</i><br><br>
+          ขณะนี้บัญชีของคุณกำลังเกิดการรั่วไหล เงินเก็บไม่มีสะสม คุณไม่สามารถบรรลุเป้าหมายเงินล้านแรกได้เลยหากยังไม่จัดสรรปันส่วนเงินใหม่ <b>ทางออกเร่งด่วน:</b><br>
+          1. <b>จ่ายเงินให้ตัวเองก่อนเสมอ (Pay Yourself First):</b> วันที่เงินเข้าถอนแยก 10% ไปเก็บทันที ห้ามแตะต้อง!<br>
+          2. <b>ตัดลดสิ่งที่ไม่จำเป็น:</b> สำรวจตารางด้านล่างและชี้เป้าตัดลดรูรั่วไหลที่เลวร้ายที่สุดด่วนที่สุด
+        </p>
+      </div>
+    `;
+  } else {
+    // Case B: Savings is positive
+    // Scenario 1: Mattress saving (0% return)
+    const monthsCash = targetVal / netSavings;
+    const yearsCash = (monthsCash / 12).toFixed(1);
 
-  รายการธุรกรรมล่าสุด 30 รายการ:
-  ${txSummaryText}
+    // Scenario 2: Invested saving (compound interest return)
+    // Formula: FV = P * (((1 + r)^n - 1) / r)
+    // Solving for n: n = ln((FV * r / P) + 1) / ln(1 + r)
+    const monthlyRate = (interestAnnual / 100) / 12;
+    let monthsInvested = 0;
+    let yearsInvested = 0;
 
-  กรุณาเขียนบทวิเคราะห์สุขภาพการเงินและให้คำแนะนำแบบสกัดประเด็นเด่นชัดเจนเป็นข้อๆ สวยงาม (อ่านง่ายในหน้าจอมือถือ) ในหัวข้อ:
-  1. ประเมินภาพรวมสภาพคล่องปัจจุบัน (วิจารณ์ตรงไปตรงมาแต่สร้างสรรค์)
-  2. ชี้เป้ารูรั่วไหลการเงินที่เลวร้ายที่สุดในเดือนนี้
-  3. คำแนะนำการแก้ปัญหาการเงิน & วิธีลดรายจ่ายจำเป็น/ไม่จำเป็น
-  4. ข้อเตือนสติหรือคำคมการเงินสไตล์ Rich Mindset (สไตล์หนังสือพ่อรวยสอนลูก หรือคำแนะนำจากมหาเศรษฐี)
-  `;
-
-  // Create UI Loading status
-  const originalBtnText = btnAskGemini.innerHTML;
-  btnAskGemini.disabled = true;
-  btnAskGemini.innerHTML = `<i data-lucide="loader" class="icon-spin"></i> กำลังวิเคราะห์ข้อมูลการเงิน...`;
-  lucide.createIcons();
-
-  // Add User Message to Chat Log
-  const userMsgDiv = document.createElement('div');
-  userMsgDiv.className = 'chat-msg user';
-  userMsgDiv.textContent = `วิเคราะห์การเงินสำหรับเดือนนี้ให้หน่อยครับ`;
-  geminiChatLog.appendChild(userMsgDiv);
-  geminiChatLog.scrollTop = geminiChatLog.scrollHeight;
-
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }]
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) {
-      throw new Error(data.error.message || 'Unknown API error');
+    if (monthlyRate === 0) {
+      monthsInvested = monthsCash;
+    } else {
+      const logNumerator = Math.log((targetVal * monthlyRate) / netSavings + 1);
+      const logDenominator = Math.log(1 + monthlyRate);
+      monthsInvested = Math.ceil(logNumerator / logDenominator);
     }
-    if (!data.candidates || data.candidates.length === 0) {
-      throw new Error('API did not return any candidates. It might be blocked by safety settings or region restrictions.');
-    }
-    const replyText = data.candidates[0].content.parts[0].text;
+    yearsInvested = (monthsInvested / 12).toFixed(1);
+    const yearsSaved = (parseFloat(yearsCash) - parseFloat(yearsInvested)).toFixed(1);
 
-    // Add AI Response to Chat Log
-    const aiMsgDiv = document.createElement('div');
-    aiMsgDiv.className = 'chat-msg ai';
-    aiMsgDiv.innerHTML = formatMarkdownToHTML(replyText);
-    geminiChatLog.appendChild(aiMsgDiv);
-
-    // Also update main local advice panel with this premium text!
-    advMindsetText.innerHTML = formatMarkdownToHTML(replyText);
-    
-  } catch (err) {
-    console.error(err);
-    let diagInfo = '';
-    try {
-      const diagRes = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${geminiApiKey}`);
-      const diagData = await diagRes.json();
-      if (diagData.error) {
-        diagInfo = `\n\n[วินิจฉัยจาก Google: ${diagData.error.message} (สถานะ: ${diagData.error.status}, รหัส: ${diagData.error.code})]`;
-      } else if (diagData.models) {
-        const list = diagData.models.map(m => m.name.replace('models/', '')).join(', ');
-        diagInfo = `\n\n[บัญชีคุณมีรุ่นโมเดลให้ใช้ได้แก่: ${list}]`;
-      }
-    } catch (diagErr) {
-      diagInfo = `\n\n[ไม่สามารถดึงข้อมูลวินิจฉัยได้: ${diagErr.message}]`;
+    // Scorecard grade
+    let grade = 'C';
+    let gradeColor = '#f59e0b';
+    let gradeTitle = 'วินัยระดับพอใช้';
+    if (savingsRate >= 30) {
+      grade = 'A';
+      gradeColor = '#10b981';
+      gradeTitle = 'วินัยระดับมหาเศรษฐี (ออมเทพ)';
+    } else if (savingsRate >= 15) {
+      grade = 'B';
+      gradeColor = '#3b82f6';
+      gradeTitle = 'วินัยการเงินดี';
+    } else if (savingsRate < 0) {
+      grade = 'D';
+      gradeColor = '#ef4444';
+      gradeTitle = 'การเงินวิกฤต (หนี้บาน)';
     }
 
-    const errorMsgDiv = document.createElement('div');
-    errorMsgDiv.className = 'chat-msg ai';
-    errorMsgDiv.textContent = `เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI: ${err.message}.${diagInfo}\n\nกรุณาตรวจสอบว่า API Key ถูกต้องและอินเทอร์เน็ตยังใช้งานได้ดีครับ`;
-    geminiChatLog.appendChild(errorMsgDiv);
+    reportHTML = `
+      <div style="font-weight: 700; font-size: 13px; margin-bottom: 12px; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+        <span>🎯 บทวิเคราะห์ความมั่งคั่งรายบุคคล</span>
+        <span style="font-size: 10px; background: ${gradeColor}22; color: ${gradeColor}; padding: 2px 8px; border-radius: 12px; border: 1px solid ${gradeColor}44;">${gradeTitle}</span>
+      </div>
+
+      <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 11px;">
+        หากคุณออมเงินระดับเดือนนี้อย่างคงเส้นคงวา (ออมเดือนละ <b>฿${netSavings.toLocaleString()}</b>) สู่เป้าหมาย <b>฿${targetVal.toLocaleString()}</b>:
+      </p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px;">
+          <div style="font-size: 9px; color: var(--text-muted);">หยอดกระปุกออมทรัพย์ (0% ดอกเบี้ย)</div>
+          <div style="font-size: 15px; font-weight: 800; margin-top: 4px; color: #94a3b8;">${yearsCash} ปี</div>
+          <div style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">(${Math.ceil(monthsCash)} เดือน)</div>
+        </div>
+        <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); padding: 10px; border-radius: 8px;">
+          <div style="font-size: 9px; color: var(--income);">ลงทุนรับปันผล (${interestAnnual}% ต่อปี)</div>
+          <div style="font-size: 15px; font-weight: 800; margin-top: 4px; color: var(--income);">${yearsInvested} ปี</div>
+          <div style="font-size: 8px; color: var(--income); opacity: 0.8; margin-top: 2px;">(${monthsInvested} เดือน)</div>
+        </div>
+      </div>
+
+      ${parseFloat(yearsSaved) > 0 ? `
+        <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid var(--income); padding: 8px 12px; border-radius: 4px; font-size: 10px; line-height: 1.4; color: var(--income); margin-bottom: 12px;">
+          💡 <b>พลังแห่งดอกเบี้ยทบต้น:</b> การลงทุนได้ผลตอบแทนเฉลี่ย ${interestAnnual}% ต่อปี ช่วยย่นระยะเวลาให้คุณถึงเป้าหมายได้เร็วขึ้น <b>${yearsSaved} ปี</b>!
+        </div>
+      ` : ''}
+    `;
   }
 
-  // Restore button status
-  btnAskGemini.disabled = false;
-  btnAskGemini.innerHTML = originalBtnText;
-  geminiChatLog.scrollTop = geminiChatLog.scrollHeight;
+  // 3. Leak Analysis Section (Sourced from Transaction percentages)
+  const foodPercent = totalIncome > 0 ? (categorySums["🍔 ของกิน"] / totalIncome) * 100 : 0;
+  const transferPercent = totalIncome > 0 ? (categorySums["💸 โอนให้คนอื่น"] / totalIncome) * 100 : 0;
+  const fixedPercent = totalIncome > 0 ? (categorySums["🏠 รายจ่ายประจำเดือน"] / totalIncome) * 100 : 0;
+  const unexpectedPercent = totalIncome > 0 ? (categorySums["⚠️ รายจ่ายไม่คาดคิด"] / totalIncome) * 100 : 0;
+
+  let leaksHTML = `
+    <div style="font-weight: 700; font-size: 11px; margin-top: 14px; margin-bottom: 6px; color: var(--text-primary);">🪠 วิเคราะห์รูรั่วไหลทางการเงิน:</div>
+    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 10px; line-height: 1.4; color: var(--text-secondary);">
+  `;
+
+  let hasLeak = false;
+
+  if (foodPercent > 35) {
+    hasLeak = true;
+    leaksHTML += `
+      <div style="background: rgba(245, 158, 11, 0.05); border-left: 2px solid #f59e0b; padding: 6px 10px; border-radius: 4px;">
+        🍔 <b>ค่าอาหารสูงมาก (${foodPercent.toFixed(0)}%):</b> คุณจ่ายเงินไปกับค่าของกินหนักเกินควร ลองงดมื้อพิเศษ และควบคุมงบส่วนนี้เพื่อกู้คืนสภาพคล่องออมเงินให้โตขึ้น
+      </div>
+    `;
+  }
+  if (transferPercent > 20) {
+    hasLeak = true;
+    leaksHTML += `
+      <div style="background: rgba(245, 158, 11, 0.05); border-left: 2px solid #f59e0b; padding: 6px 10px; border-radius: 4px;">
+        💸 <b>โอนให้คนอื่นบ่อย (${transferPercent.toFixed(0)}%):</b> ยอดช่วยเหลือหรือโอนให้บุคคลอื่นค่อนข้างสูง วางขอบเขตก่อนเงินสดในมือจะหมด (อย่าช่วยเหลือคนอื่นจนตนเองเดือดร้อน)
+      </div>
+    `;
+  }
+  if (fixedPercent > 45) {
+    hasLeak = true;
+    leaksHTML += `
+      <div style="background: rgba(239, 68, 68, 0.05); border-left: 2px solid var(--expense); padding: 6px 10px; border-radius: 4px;">
+        🏠 <b>รายจ่ายประจำดึงเงินเยอะ (${fixedPercent.toFixed(0)}%):</b> ค่าเช่า/น้ำไฟ/เน็ตสูงเกินไป ถือเป็นหนี้สินถาวรที่ดึงกระแสเงินสดคุณทุกเดือน ลองมองหาหอพักราคาเหมาะสม หรือปรับลดโปรค่าโทรศัพท์ลง
+      </div>
+    `;
+  }
+  if (unexpectedPercent > 15) {
+    hasLeak = true;
+    leaksHTML += `
+      <div style="background: rgba(239, 68, 68, 0.05); border-left: 2px solid var(--expense); padding: 6px 10px; border-radius: 4px;">
+        ⚠️ <b>อุบัติเหตุการเงินไม่คาดคิด (${unexpectedPercent.toFixed(0)}%):</b> ยอดค่าซ่อมแซม/ฉุกเฉินดึงเงินเก็บคุณไป สิ่งที่คุณต้องการเร่งด่วนคือ "เงินสำรองฉุกเฉิน" แยกต่างหากอย่างน้อย 6 เท่าของรายจ่ายประจำ
+      </div>
+    `;
+  }
+
+  if (!hasLeak && totalIncome > 0) {
+    leaksHTML += `
+      <div style="background: rgba(16, 185, 129, 0.05); border-left: 2px solid var(--income); padding: 8px 10px; border-radius: 4px; color: var(--income);">
+        ✨ <b>สุขภาพการเงินสมบูรณ์แบบ:</b> ยอดค่าใช้จ่ายในแต่ละหมวดหมู่ของคุณไม่มีจุดรั่วไหลที่น่ากังวลเลย มีวินัยการเงินยอดเยี่ยมมากครับ!
+      </div>
+    `;
+  }
+
+  leaksHTML += `</div>`;
+
+  // 4. Quote / Rich Mindset Box
+  let quote = `💬 <i>"ความมั่งคั่งไม่ได้ขึ้นอยู่กับว่าคุณหาเงินได้เท่าไหร่ แต่อยู่ที่ว่าคุณเก็บเงินได้เท่าไหร่ต่างหาก"</i> - โรเบิร์ต คิโยซากิ (พ่อรวยสอนลูก)`;
+  if (savingsRate >= 30) {
+    quote = `💬 <i>"จงซื้อสินทรัพย์ไม่ใช่ซื้อหนี้สิน และจ่ายเงินให้ตัวเองก่อนเสมอ"</i> - พลังมหาเศรษฐีของคุณกำลังเริ่มต้นอย่างมั่นคง`;
+  } else if (savingsRate < 0) {
+    quote = `💬 <i>"รูรั่วเพียงเล็กน้อย ก็สามารถทำให้เรือลำใหญ่ล่มได้เช่นกัน"</i> - จงระวังเศษเงินจ่ายเล็กน้อยที่จ่ายทิ้งขว้างในแต่ละวัน`;
+  }
+
+  const quoteHTML = `
+    <div style="margin-top: 14px; padding: 10px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; font-size: 10.5px; line-height: 1.5; color: var(--text-muted); text-align: center;">
+      ${quote}
+    </div>
+  `;
+
+  // Combine everything and insert into element
+  wealthSimText.innerHTML = reportHTML + leaksHTML + quoteHTML;
   lucide.createIcons();
 }
 

@@ -265,31 +265,35 @@
         </div>
       </div>
 
-      <!-- Dynamic Gemini AI Analysis Card (Optional) -->
-      <div class="card gemini-api-card">
+      <!-- Interactive Wealth Simulator Card (No API Key required) -->
+      <div class="card wealth-simulator-card">
         <div class="gemini-header">
-          <span class="gemini-logo">🤖</span>
+          <span class="gemini-logo">📈</span>
           <div>
-            <h3>วิเคราะห์การเงินเชิงลึกด้วย Gemini AI</h3>
-            <p>กรอก API Key ฟรีเพื่อรับคำปรึกษาแบบโต้ตอบได้จริง</p>
+            <h3>จำลองการเดินทางสู่เงินล้านแรก</h3>
+            <p>ประเมินเป้าหมายเงินออมและวิเคราะห์รูรั่วไหลทางการเงินทันที</p>
           </div>
-        </div>
-        
-        <div class="api-key-input-group">
-          <input type="password" id="gemini-api-key" placeholder="กรอก Gemini API Key ที่นี่..." class="form-control">
-          <button class="btn-secondary" id="btn-save-api-key">บันทึกคีย์</button>
-        </div>
-        <div class="api-key-help">
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">ขอ API Key ฟรีที่นี่ <i data-lucide="external-link"></i></a>
         </div>
 
-        <div id="gemini-chat-section" class="gemini-chat-area" style="display: none;">
-          <div class="chat-log" id="gemini-chat-log">
-            <div class="chat-msg ai">สวัสดีครับ! ผมสามารถวิเคราะห์รายการบัญชีเดือนนี้ของคุณในสไตล์คนรวยและแนะนำวิธีออมหรือลดรายจ่ายได้อย่างละเอียด กดวิเคราะห์ด้านล่างได้เลยครับ</div>
+        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <div>
+            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">เป้าหมายเงินออมที่คุณต้องการ (บาท):</label>
+            <input type="number" id="wealth-target-input" value="1000000" class="form-control" placeholder="ระบุเป้าหมาย เช่น 1,000,000">
           </div>
-          <button class="btn-primary w-100" id="btn-ask-gemini-analysis">
-            <i data-lucide="sparkles"></i> เริ่มวิเคราะห์ด้วย AI อัจฉริยะ
+          <div>
+            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">อัตราดอกเบี้ย/ผลตอบแทนคาดหวังต่อปี (%):</label>
+            <input type="number" id="wealth-interest-input" value="6" class="form-control" placeholder="ระบุผลตอบแทน เช่น 6">
+          </div>
+          <button class="btn-primary w-100" id="btn-run-wealth-simulation" style="margin-top: 8px;">
+            <i data-lucide="calculator"></i> วิเคราะห์รูรั่ว & จำลองเส้นทางการออม
           </button>
+        </div>
+
+        <!-- Simulation Results (Initially Hidden) -->
+        <div id="wealth-sim-results" class="gemini-chat-area" style="display: none; margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px; flex-direction: column; gap: 12px;">
+          <div class="chat-msg ai" id="wealth-sim-text" style="font-size: 12px; line-height: 1.6;">
+            <!-- Sim results HTML filled by JS -->
+          </div>
         </div>
       </div>
     </section>
