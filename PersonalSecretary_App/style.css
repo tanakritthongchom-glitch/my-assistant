@@ -614,10 +614,17 @@ body {
 
 /* Transaction List (History Panel) */
 .filters-bar {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
+}
+
+.filters-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: center;
 }
 
 .transactions-list-container {

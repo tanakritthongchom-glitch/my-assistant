@@ -193,22 +193,45 @@
 
       <!-- Filters -->
       <div class="filters-bar">
-        <select id="filter-type" class="form-control-compact">
-          <option value="all">ทุกประเภท</option>
-          <option value="income">เฉพาะรายรับ</option>
-          <option value="expense">เฉพาะรายจ่าย</option>
-          <option value="debt">เฉพาะหนี้สิน</option>
-        </select>
-        <select id="filter-category" class="form-control-compact">
-          <option value="all">ทุกหมวดหมู่</option>
-          <option value="🍔 ของกิน">🍔 ของกิน</option>
-          <option value="💸 โอนให้คนอื่น">💸 โอนให้คนอื่น</option>
-          <option value="🏠 รายจ่ายประจำเดือน">🏠 รายจ่ายประจำเดือน</option>
-          <option value="⚠️ รายจ่ายไม่คาดคิด">⚠️ รายจ่ายไม่คาดคิด</option>
-          <option value="🛒 รายจ่ายทั่วไป/อื่นๆ">🛒 รายจ่ายทั่วไป/อื่นๆ</option>
-          <option value="💰 รายรับ">💰 รายรับ</option>
-          <option value="🏦 หนี้สิน">🏦 หนี้สิน</option>
-        </select>
+        <div class="filters-row">
+          <select id="filter-type" class="form-control-compact">
+            <option value="all">ทุกประเภท</option>
+            <option value="income">เฉพาะรายรับ</option>
+            <option value="expense">เฉพาะรายจ่าย</option>
+            <option value="debt">เฉพาะหนี้สิน</option>
+          </select>
+          <select id="filter-category" class="form-control-compact">
+            <option value="all">ทุกหมวดหมู่</option>
+            <option value="🍔 ของกิน">🍔 ของกิน</option>
+            <option value="💸 โอนให้คนอื่น">💸 โอนให้คนอื่น</option>
+            <option value="🏠 รายจ่ายประจำเดือน">🏠 รายจ่ายประจำเดือน</option>
+            <option value="⚠️ รายจ่ายไม่คาดคิด">⚠️ รายจ่ายไม่คาดคิด</option>
+            <option value="⛽ ค่าน้ำมัน">⛽ ค่าน้ำมัน</option>
+            <option value="📶 ค่าเน็ต">📶 ค่าเน็ต</option>
+            <option value="🤝 ค่าให้คนอื่นยืมเงิน">🤝 ค่าให้คนอื่นยืมเงิน</option>
+            <option value="🛒 รายจ่ายทั่วไป/อื่นๆ">🛒 รายจ่ายทั่วไป/อื่นๆ</option>
+            <option value="💰 รายรับ">💰 รายรับ</option>
+            <option value="💼 เงินเดือน">💼 เงินเดือน</option>
+            <option value="💸 เงินโอนจากคนอื่น">💸 เงินโอนจากคนอื่น</option>
+            <option value="🛠️ รับจ้าง">🛠️ รับจ้าง</option>
+            <option value="❓ อื่นๆ">❓ อื่นๆ</option>
+            <option value="🏦 หนี้สิน">🏦 หนี้สิน</option>
+          </select>
+        </div>
+        <div class="filters-row">
+          <select id="filter-range" class="form-control-compact">
+            <option value="all">ทุกช่วงเวลา</option>
+            <option value="1week">1 อาทิตย์ (7 วันล่าสุด)</option>
+            <option value="1month">1 เดือน (30 วันล่าสุด)</option>
+            <option value="6months">6 เดือนล่าสุด</option>
+            <option value="1year">1 ปีล่าสุด</option>
+            <option value="custom">ระบุจำนวนวันเอง...</option>
+          </select>
+          <div id="custom-days-container" style="display: none; align-items: center; gap: 4px;">
+            <input type="number" id="input-custom-days" value="15" min="1" class="form-control-compact" style="width: 70px; text-align: center; font-weight: bold; background-color: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px;">
+            <span style="font-size: 11px; color: var(--text-secondary);">วันล่าสุด</span>
+          </div>
+        </div>
       </div>
 
       <!-- Transactions List -->

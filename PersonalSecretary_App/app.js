@@ -112,6 +112,9 @@ const chartPlaceholder = document.getElementById('chart-placeholder');
 // History elements
 const filterType = document.getElementById('filter-type');
 const filterCategory = document.getElementById('filter-category');
+const filterRange = document.getElementById('filter-range');
+const customDaysContainer = document.getElementById('custom-days-container');
+const inputCustomDays = document.getElementById('input-custom-days');
 const historyListContainer = document.getElementById('history-list-container');
 
 // Advisor elements
@@ -150,14 +153,48 @@ const btnConfirmCloseCycle = document.getElementById('btn-confirm-close-cycle');
 const cycleSummaryReport = document.getElementById('cycle-summary-report');
 const chkCurrentCycleOnly = document.getElementById('chk-current-cycle-only');
 
-// Category list
+// Expense category list
 const categories = [
   "🍔 ของกิน",
   "💸 โอนให้คนอื่น",
   "🏠 รายจ่ายประจำเดือน",
   "⚠️ รายจ่ายไม่คาดคิด",
+  "⛽ ค่าน้ำมัน",
+  "📶 ค่าเน็ต",
+  "🤝 ค่าให้คนอื่นยืมเงิน",
   "🛒 รายจ่ายทั่วไป/อื่นๆ"
 ];
+
+// Income category list
+const incomeCategories = [
+  "💼 เงินเดือน",
+  "💸 เงินโอนจากคนอื่น",
+  "🛠️ รับจ้าง",
+  "❓ อื่นๆ"
+];
+
+// Helper to populate category dropdown based on type (income/expense)
+function populateManualCategories(type) {
+  const categorySelect = document.getElementById('tx-category');
+  if (!categorySelect) return;
+  
+  categorySelect.innerHTML = '';
+  if (type === 'income') {
+    incomeCategories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      categorySelect.appendChild(opt);
+    });
+  } else if (type === 'expense') {
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      categorySelect.appendChild(opt);
+    });
+  }
+}
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -181,6 +218,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Setup Event Listeners
   setupEventListeners();
 
+  // Populate manual transaction categories dropdown (defaults to expense)
+  populateManualCategories('expense');
+
   // Populate month filter choices
   populateMonthFilter();
 
@@ -195,6 +235,7 @@ function setupEventListeners() {
   btnAddManual.addEventListener('click', () => {
     document.getElementById('tx-date').valueAsDate = new Date();
     formManual.reset();
+    populateManualCategories('expense');
     document.getElementById('tx-date').valueAsDate = new Date();
     modalAdd.classList.add('active');
   });
@@ -209,7 +250,7 @@ function setupEventListeners() {
     }
   });
 
-  // Modal form input type changes dynamic field labels
+  // Modal form input type changes dynamic field labels and populates relevant categories
   const typeRadios = formManual.querySelectorAll('input[name="tx-type"]');
   typeRadios.forEach(radio => {
     radio.addEventListener('change', (e) => {
@@ -221,11 +262,13 @@ function setupEventListeners() {
       if (type === 'income') {
         titleLabel.textContent = 'แหล่งที่มารายรับ / ผู้โอน';
         titleInput.placeholder = 'เช่น เงินเดือน, ขายของได้, พ่อโอนให้';
-        categoryGroup.style.display = 'none';
+        categoryGroup.style.display = 'flex';
+        populateManualCategories('income');
       } else if (type === 'expense') {
         titleLabel.textContent = 'รายการจ่าย / โอนให้ใคร';
         titleInput.placeholder = 'เช่น ค่าชาบู, โอนให้กิ๊ฟ, ค่าซ่อมแอร์';
         categoryGroup.style.display = 'flex';
+        populateManualCategories('expense');
       } else { // debt
         titleLabel.textContent = 'ชื่อหนี้สิน / เจ้าหนี้';
         titleInput.placeholder = 'เช่น กู้กสิกร, ยืมเพื่อน, ค่าบัตรเครดิต';
@@ -243,9 +286,7 @@ function setupEventListeners() {
     const date = document.getElementById('tx-date').value;
     let category = '';
 
-    if (type === 'income') {
-      category = '💰 รายรับ';
-    } else if (type === 'debt') {
+    if (type === 'debt') {
       category = '🏦 หนี้สิน';
     } else {
       category = document.getElementById('tx-category').value;
@@ -299,6 +340,19 @@ function setupEventListeners() {
   // Filter History
   filterType.addEventListener('change', renderHistory);
   filterCategory.addEventListener('change', renderHistory);
+  if (filterRange) {
+    filterRange.addEventListener('change', () => {
+      if (filterRange.value === 'custom') {
+        customDaysContainer.style.display = 'flex';
+      } else {
+        customDaysContainer.style.display = 'none';
+      }
+      renderHistory();
+    });
+  }
+  if (inputCustomDays) {
+    inputCustomDays.addEventListener('input', renderHistory);
+  }
 
   // Wealth Simulator Event Listener
   if (btnRunWealthSimulation) {
@@ -475,13 +529,10 @@ function updateDashboard() {
   let totalDebt = 0;
 
   // Group expense by category
-  const expenseSummary = {
-    "🍔 ของกิน": 0,
-    "💸 โอนให้คนอื่น": 0,
-    "🏠 รายจ่ายประจำเดือน": 0,
-    "⚠️ รายจ่ายไม่คาดคิด": 0,
-    "🛒 รายจ่ายทั่วไป/อื่นๆ": 0
-  };
+  const expenseSummary = {};
+  categories.forEach(cat => {
+    expenseSummary[cat] = 0;
+  });
 
   // Get selected month filter value
   const monthFilter = document.getElementById('db-month-filter');
@@ -598,13 +649,47 @@ function updateDashboard() {
 function renderHistory() {
   const selectedType = filterType.value;
   const selectedCat = filterCategory.value;
+  const selectedRange = filterRange ? filterRange.value : 'all';
+
+  // Calculate range date threshold
+  let dateThreshold = null;
+  if (selectedRange !== 'all') {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // start of today
+    
+    if (selectedRange === '1week') {
+      today.setDate(today.getDate() - 7);
+      dateThreshold = today;
+    } else if (selectedRange === '1month') {
+      today.setMonth(today.getMonth() - 1);
+      dateThreshold = today;
+    } else if (selectedRange === '6months') {
+      today.setMonth(today.getMonth() - 6);
+      dateThreshold = today;
+    } else if (selectedRange === '1year') {
+      today.setFullYear(today.getFullYear() - 1);
+      dateThreshold = today;
+    } else if (selectedRange === 'custom') {
+      const days = parseInt(inputCustomDays.value) || 15;
+      today.setDate(today.getDate() - days);
+      dateThreshold = today;
+    }
+  }
 
   historyListContainer.innerHTML = '';
 
   const filtered = transactions.filter(tx => {
     const matchType = (selectedType === 'all') || (tx.type === selectedType);
     const matchCat = (selectedCat === 'all') || (tx.category === selectedCat);
-    return matchType && matchCat;
+    
+    let matchRange = true;
+    if (dateThreshold && tx.date) {
+      const txDate = new Date(tx.date);
+      txDate.setHours(0, 0, 0, 0);
+      matchRange = txDate >= dateThreshold;
+    }
+    
+    return matchType && matchCat && matchRange;
   });
 
   if (filtered.length === 0) {
@@ -683,13 +768,10 @@ function updateAdvisor() {
   let totalIncome = 0;
   let totalExpense = 0;
   
-  const categorySums = {
-    "🍔 ของกิน": 0,
-    "💸 โอนให้คนอื่น": 0,
-    "🏠 รายจ่ายประจำเดือน": 0,
-    "⚠️ รายจ่ายไม่คาดคิด": 0,
-    "🛒 รายจ่ายทั่วไป/อื่นๆ": 0
-  };
+  const categorySums = {};
+  categories.forEach(cat => {
+    categorySums[cat] = 0;
+  });
 
   // Get selected month filter value from dashboard selector
   const monthFilter = document.getElementById('db-month-filter');
@@ -769,6 +851,9 @@ function updateAdvisor() {
     const transferPercent = totalIncome > 0 ? (categorySums["💸 โอนให้คนอื่น"] / totalIncome) * 100 : 0;
     const fixedPercent = totalIncome > 0 ? (categorySums["🏠 รายจ่ายประจำเดือน"] / totalIncome) * 100 : 0;
     const unexpectedPercent = totalIncome > 0 ? (categorySums["⚠️ รายจ่ายไม่คาดคิด"] / totalIncome) * 100 : 0;
+    const fuelPercent = totalIncome > 0 ? (categorySums["⛽ ค่าน้ำมัน"] / totalIncome) * 100 : 0;
+    const internetPercent = totalIncome > 0 ? (categorySums["📶 ค่าเน็ต"] / totalIncome) * 100 : 0;
+    const lendPercent = totalIncome > 0 ? (categorySums["🤝 ค่าให้คนอื่นยืมเงิน"] / totalIncome) * 100 : 0;
 
     if (foodPercent > 35) {
       advice += `🍔 **เจาะรูรั่วค่าอาหาร (${foodPercent.toFixed(0)}% ของรายรับ):** คุณเสียเงินไปกับค่าอาหารค่อนข้างสูงมาก คนรวยมักเห็นคุณค่าของการมีสุขภาพดีและทานอาหารที่ดี แต่พวกเขาจะไม่ปล่อยให้ไลฟ์สไตล์หรูหราเกินความจริง (Lifestyle Inflation) ดึงเงินเก็บออกไป ลองลดมื้อพิเศษลงและโฟกัสอาหารที่มีคุณค่าแต่ประหยัดกระเป๋าดูครับ\n\n`;
@@ -779,14 +864,26 @@ function updateAdvisor() {
     }
 
     if (fixedPercent > 45) {
-      advice += `🏠 **รูรั่วรายจ่ายประจำเดือน (${fixedPercent.toFixed(0)}% ของรายรับ):** ค่าเช่าหอพัก ค่าน้ำค่าไฟ และค่าเน็ต ถือเป็น 'หนี้สิน' ในมิติการเงินเพราะมันดึงเงินออกจากกระเป๋าคุณทุกเดือนถาวร หากสัดส่วนนี้สูงเกินไป ลองหาหนทางลดภารกิจประจำลง เช่น ปรับโปรค่าเน็ตมือถือ หรือย้ายไปอยู่หอพักที่ราคาสมเหตุสมผลมากขึ้นเพื่อปลดปล่อยเงินสด\n\n`;
+      advice += `🏠 **รูรั่วรายจ่ายประจำเดือน (${fixedPercent.toFixed(0)}% ของรายรับ):** ค่าเช่าหอพัก ค่าน้ำค่าไฟ ถือเป็น 'หนี้สิน' ในมิติการเงินเพราะมันดึงเงินออกจากกระเป๋าคุณทุกเดือนถาวร หากสัดส่วนนี้สูงเกินไป ลองหาหนทางลดภารกิจประจำลงเพื่อปลดปล่อยเงินสด\n\n`;
     }
 
     if (unexpectedPercent > 15) {
-      advice += `⚠️ **วิกฤตค่าใช้จ่ายไม่คาดคิด (${unexpectedPercent.toFixed(0)}% ของรายรับ):** ค่าซ่อมแซม, ค่าซ่อมรถ หรืออุบัติเหตุเหล่านี้เกิดขึ้นได้ตลอดเวลาและพร้อมทำลายแผนออมเงินของคุณได้เสมอ สิ่งที่คนรวยทำคือการมี "เงินสำรองฉุกเฉิน (Emergency Fund)" แยกต่างหาก 6-12 เท่าของค่าใช้จ่ายรายเดือน เพื่อที่เมื่อเกิดวิกฤต เงินก้อนหลักจะไม่สั่นคลอน คุณควรรีบสร้างกองทุนฉุกเฉินนี้โดยเร็วครับ\n\n`;
+      advice += `⚠️ **วิกฤตค่าใช้จ่ายไม่คาดคิด (${unexpectedPercent.toFixed(0)}% ของรายรับ):** ค่าซ่อมแซม, ค่าซ่อมรถ หรืออุบัติเหตุเหล่านี้เกิดขึ้นได้ตลอดเวลาและพร้อมทำลายแผนออมเงินของคุณได้เสมอ สิ่งที่คนรวยทำคือการมี "เงินสำรองฉุกเฉิน (Emergency Fund)" แยกต่างหาก 6-12 เท่าของค่าใช้จ่ายรายเดือนเพื่อรองรับยามวิกฤตครับ\n\n`;
     }
 
-    if (foodPercent <= 35 && transferPercent <= 20 && fixedPercent <= 45 && unexpectedPercent <= 15) {
+    if (fuelPercent > 15) {
+      advice += `⛽ **ค่าน้ำมันค่อนข้างสูง (${fuelPercent.toFixed(0)}% ของรายรับ):** ค่าน้ำมันในการขับขี่ค่อนข้างสูง ลองวางแผนเส้นทางการเดินทาง หรือหากเป็นไปได้ปรับลดการขับขี่รถส่วนบุคคลในระยะใกล้ลงเพื่อช่วยเพิ่มกระแสเงินสดออมครับ\n\n`;
+    }
+
+    if (internetPercent > 8) {
+      advice += `📶 **ค่าเน็ตค่อนข้างสูง (${internetPercent.toFixed(0)}% ของรายรับ):** ค่าเน็ตมือถือและเน็ตบ้านค่อนข้างแพง ลองปรับเปลี่ยนแพ็กเกจราคาพิเศษ หรือโปรโมชั่นที่เหมาะสมกับความต้องการจริงครับ\n\n`;
+    }
+
+    if (lendPercent > 10) {
+      advice += `🤝 **ระวังจุดเสี่ยงให้คนอื่นยืมเงิน (${lendPercent.toFixed(0)}% ของรายรับ):** การให้ยืมเงินเป็นสัดส่วนที่เยอะและเสี่ยงที่จะเผชิญปัญหาหนี้สูญ ควรจำกฎเหล็กไว้ว่าอย่าให้ยืมเงินหากยังไม่มีเงินเย็นที่พร้อมจะสูญเสียมันไปได้โดยไม่เดือดร้อนครับ\n\n`;
+    }
+
+    if (foodPercent <= 35 && transferPercent <= 20 && fixedPercent <= 45 && unexpectedPercent <= 15 && fuelPercent <= 15 && internetPercent <= 8 && lendPercent <= 10) {
       advice += `✨ **ภาพรวมสมดุลทางการเงิน:** หมวดค่าใช้จ่ายหลักของคุณไม่มีการรั่วไหลที่รุนแรง ถือว่ามีวินัยการเงินที่ดีมาก ขั้นต่อไปคือการเพิ่ม 'รายรับหลายช่องทาง' (Multiple Streams of Income) เพื่อนำเงินเก็บก้อนนี้ไปทำงานแทนคุณครับ!`;
     }
   }
@@ -987,13 +1084,22 @@ function parseSlipTextHeuristic(text) {
   
   // Category keywords
   const foodKeywords = ['ก๋วยเตี๋ยว', 'ชาบู', 'ส้มตำ', 'หมูกระทะ', '7-eleven', 'เซเว่น', 'grab', 'foodpanda', 'lineman', 'สุกี้', 'บุฟเฟ่ต์', 'กาแฟ', 'cafe', 'เบเกอรี่', 'อาหาร', 'food', 'shabu', 'starbucks', 'amazon', 'โรตี', 'ข้าว', 'กะเพรา', 'หมูกรอบ', 'สุกี้', 'ร้านค้า', 'ไอศกรีม', 'ice cream'];
-  const fixedKeywords = ['ค่าน้ำ', 'ค่าไฟ', 'ค่าเน็ต', 'เน็ต', 'wifi', 'หอพัก', 'อพาร์ทเม้นท์', 'ค่าเช่า', 'rent', 'water', 'electricity', 'ais', 'true', 'dtac', '3bb', 'นิติ', 'นิติบุคคล', 'ค่าส่วนกลาง', 'ประกัน', 'พรีเมียม', 'เน็ตบ้าน', 'ห้องพัก'];
+  const fixedKeywords = ['ค่าน้ำ', 'ค่าไฟ', 'หอพัก', 'อพาร์ทเม้นท์', 'ค่าเช่า', 'rent', 'water', 'electricity', 'นิติ', 'นิติบุคคล', 'ค่าส่วนกลาง', 'ประกัน', 'พรีเมียม', 'ห้องพัก'];
   const unexpectedKeywords = ['ซ่อม', 'พัง', 'อู่', 'ซ่อมรถ', 'อะไหล่', 'ยางรั่ว', 'ใบสั่ง', 'ปรับ', 'ตำรวจ', 'โรงพยาบาล', 'หมอ', 'ค่ายา', 'รักษา', 'อุบัติเหตุ', 'accident', 'fine', 'พยาบาล', 'คลินิก', 'clinic', 'ยา'];
   const transferKeywords = ['นาย', 'นาง', 'นางสาว', 'เด็กชาย', 'เด็กหญิง', 'mr.', 'mrs.', 'miss', 'ms.', 'เพื่อน', 'โอนให้เพื่อน'];
+  const fuelKeywords = ['น้ำมัน', 'ปั๊ม', 'ptt', 'shell', 'caltex', 'bangchak', 'บางจาก', 'เติมน้ำมัน', 'gasoline', 'fuel'];
+  const internetKeywords = ['ค่าเน็ต', 'เน็ต', 'wifi', 'ais', 'true', 'dtac', '3bb', 'เน็ตบ้าน', 'เน็ตมือถือ'];
+  const lendKeywords = ['ยืม', 'ให้ยืม', 'ยืมเงิน', 'borrow', 'lend'];
 
   // Check matching
   if (foodKeywords.some(key => txtLower.includes(key))) {
     category = '🍔 ของกิน';
+  } else if (fuelKeywords.some(key => txtLower.includes(key))) {
+    category = '⛽ ค่าน้ำมัน';
+  } else if (internetKeywords.some(key => txtLower.includes(key))) {
+    category = '📶 ค่าเน็ต';
+  } else if (lendKeywords.some(key => txtLower.includes(key))) {
+    category = '🤝 ค่าให้คนอื่นยืมเงิน';
   } else if (unexpectedKeywords.some(key => txtLower.includes(key))) {
     category = '⚠️ รายจ่ายไม่คาดคิด';
   } else if (fixedKeywords.some(key => txtLower.includes(key))) {
@@ -1756,6 +1862,24 @@ async function openSlipModal(txId) {
   }
 
   slipDetailDate.textContent = formatDateThai(tx.date);
+
+  // Populate category options dynamically based on transaction type
+  slipDetailCategorySelect.innerHTML = '';
+  if (tx.type === 'income') {
+    incomeCategories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      slipDetailCategorySelect.appendChild(opt);
+    });
+  } else {
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      slipDetailCategorySelect.appendChild(opt);
+    });
+  }
   slipDetailCategorySelect.value = tx.category;
 
   // Render slip image if exists
@@ -1839,13 +1963,10 @@ function openCycleModal() {
   let activeIncome = 0;
   let activeExpense = 0;
   
-  const categorySums = {
-    "🍔 ของกิน": 0,
-    "💸 โอนให้คนอื่น": 0,
-    "🏠 รายจ่ายประจำเดือน": 0,
-    "⚠️ รายจ่ายไม่คาดคิด": 0,
-    "🛒 รายจ่ายทั่วไป/อื่นๆ": 0
-  };
+  const categorySums = {};
+  categories.forEach(cat => {
+    categorySums[cat] = 0;
+  });
 
   const activeTxs = transactions.filter(tx => {
     const matchMonth = (selectedMonth === 'all') || tx.date.startsWith(selectedMonth);
@@ -1892,6 +2013,9 @@ function openCycleModal() {
   const foodPct = activeIncome > 0 ? (categorySums["🍔 ของกิน"] / activeIncome) * 100 : 0;
   const transferPct = activeIncome > 0 ? (categorySums["💸 โอนให้คนอื่น"] / activeIncome) * 100 : 0;
   const fixedPct = activeIncome > 0 ? (categorySums["🏠 รายจ่ายประจำเดือน"] / activeIncome) * 100 : 0;
+  const fuelPct = activeIncome > 0 ? (categorySums["⛽ ค่าน้ำมัน"] / activeIncome) * 100 : 0;
+  const internetPct = activeIncome > 0 ? (categorySums["📶 ค่าเน็ต"] / activeIncome) * 100 : 0;
+  const lendPct = activeIncome > 0 ? (categorySums["🤝 ค่าให้คนอื่นยืมเงิน"] / activeIncome) * 100 : 0;
 
   if (foodPct > 35) {
     leakHTML += `<li>🍔 <b>ค่าอาหารค่อนข้างสูง:</b> สัดส่วน ${foodPct.toFixed(0)}% ของรายรับ</li>`;
@@ -1902,6 +2026,16 @@ function openCycleModal() {
   if (fixedPct > 45) {
     leakHTML += `<li>🏠 <b>รายจ่ายประจำรั้งตัวเลข:</b> สัดส่วน ${fixedPct.toFixed(0)}% ของรายรับ</li>`;
   }
+  if (fuelPct > 15) {
+    leakHTML += `<li>⛽ <b>ค่าน้ำมันค่อนข้างสูง:</b> สัดส่วน ${fuelPct.toFixed(0)}% ของรายรับ</li>`;
+  }
+  if (internetPct > 8) {
+    leakHTML += `<li>📶 <b>ค่าเน็ตค่อนข้างสูง:</b> สัดส่วน ${internetPct.toFixed(0)}% ของรายรับ</li>`;
+  }
+  if (lendPct > 10) {
+    leakHTML += `<li>🤝 <b>ให้ยืมเงินเยอะ (เสี่ยงหนี้สูญ):</b> สัดส่วน ${lendPct.toFixed(0)}% ของรายรับ</li>`;
+  }
+
   if (leakHTML === '') {
     leakHTML = '<li style="color: var(--income);">✨ <b>ยินดีด้วย!</b> ไม่พบจุดรั่วไหลเด่นชัดในรอบการออมนี้</li>';
   }
